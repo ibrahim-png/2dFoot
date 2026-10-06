@@ -14,6 +14,7 @@ let lastAutoPlayerId = 10;
 let matchMode = 'normal', manualDraft = null, manualDrag = null, applyingManual = false, manualStopRequested = false;
 let manualMeterPower = .3;
 let pitchExpanded = false, fullscreenPending = false;
+let pitchRotated = false, pitchOrientationLocked = false;
 let powerPointerHandled = false;
 let onlineRoomCode = null, onlinePlayerToken = null, onlineTeam = null, onlineRoomReady = false;
 const manualKeys = new Set(), DRIVE_KEYS = { KeyA: [-1, 0], KeyS: [0, 1], KeyD: [1, 0], KeyW: [0, -1] };
@@ -115,6 +116,23 @@ function setPitchExpanded(expanded) {
   document.body.classList.toggle('pitch-is-expanded', expanded);
   $('pitch-fullscreen').textContent = expanded ? '⤡ Küçült' : '⤢ Tam ekran';
   $('pitch-fullscreen').setAttribute('aria-pressed', String(expanded));
+  if (!expanded && pitchOrientationLocked) {
+    globalThis.screen?.orientation?.unlock?.(); pitchOrientationLocked = false;
+  }
+  updatePitchOrientation();
+}
+function updatePitchOrientation() {
+  pitchRotated = pitchExpanded && useLargePowerMeter() && globalThis.innerHeight > globalThis.innerWidth;
+  $('pitch-view').classList.toggle('pitch-rotated', pitchRotated);
+}
+async function lockPitchLandscape() {
+  if (!pitchExpanded || !useLargePowerMeter() || !globalThis.screen?.orientation?.lock) return;
+  try {
+    await globalThis.screen.orientation.lock('landscape');
+    if (pitchExpanded) pitchOrientationLocked = true;
+    else globalThis.screen.orientation.unlock?.();
+  } catch { /* The rotated pitch also works when orientation locking is unavailable. */ }
+  updatePitchOrientation();
 }
 async function togglePitchFullscreen() {
   if (fullscreenPending) return;
@@ -131,7 +149,10 @@ async function togglePitchFullscreen() {
     }
   } catch {
     if (document.fullscreenElement === view) setPitchExpanded(true);
-  } finally { fullscreenPending = false; }
+  } finally {
+    if (pitchExpanded) void lockPitchLandscape();
+    fullscreenPending = false;
+  }
 }
 function notice(text = '') { $('notice').textContent = text; $('notice').hidden = !text; }
 Object.assign(eventNames, { offside: 'OFSAYT', indirectFreeKick: 'ENDİREKT SERBEST VURUŞ' });
@@ -330,9 +351,12 @@ function selectManualPower(event) {
   updateManualPowerMeter(); event?.preventDefault?.();
 }
 function pitchPoint(event) {
-  const rect = $('pitch').getBoundingClientRect(), scale = Math.min(rect.width / 117, rect.height / 80);
-  const offsetX = (rect.width - 105 * scale) / 2, offsetY = (rect.height - 68 * scale) / 2;
-  return { x: Math.max(-2.4, Math.min(107.4, (event.clientX - rect.left - offsetX) / scale)), y: Math.max(0, Math.min(68, (event.clientY - rect.top - offsetY) / scale)) };
+  const rect = $('pitch').getBoundingClientRect();
+  const width = pitchRotated ? rect.height : rect.width, height = pitchRotated ? rect.width : rect.height;
+  const x = pitchRotated ? event.clientY - rect.top : event.clientX - rect.left;
+  const y = pitchRotated ? rect.left + rect.width - event.clientX : event.clientY - rect.top;
+  const scale = Math.min(width / 117, height / 80), offsetX = (width - 105 * scale) / 2, offsetY = (height - 68 * scale) / 2;
+  return { x: Math.max(-2.4, Math.min(107.4, (x - offsetX) / scale)), y: Math.max(0, Math.min(68, (y - offsetY) / scale)) };
 }
 function manualKickSource() {
   return manualDraft?.kind === 'freeKick' ? manualDraft.ball : game?.players.find(player => player.id === manualDraft?.owner);
@@ -526,6 +550,8 @@ $('manual-apply').addEventListener('click', () => { void ensureStadiumSound(); v
 $('stadium-sound').addEventListener('click', toggleStadiumSound);
 $('pitch-fullscreen').addEventListener('click', () => { void togglePitchFullscreen(); });
 document.addEventListener('fullscreenchange', () => { setPitchExpanded(document.fullscreenElement === $('pitch-view')); });
+globalThis.addEventListener?.('resize', updatePitchOrientation);
+globalThis.visualViewport?.addEventListener('resize', updatePitchOrientation);
 $('goal-close').addEventListener('click', () => { $('goal-overlay').hidden = true; goalUntil = 0; });
 $('exit-close').addEventListener('click', () => { $('exit-overlay').hidden = true; exitUntil = 0; });
 $('final-close').addEventListener('click', () => { $('final-overlay').hidden = true; });

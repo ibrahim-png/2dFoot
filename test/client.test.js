@@ -7,9 +7,9 @@ import { Simulation } from '../backend/simulation.js';
 import { speedSettings } from '../backend/speeds.js';
 const settle = () => new Promise(resolve => setImmediate(resolve));
 
-async function client(t, { audio = false, audioThrows = false, webAudio = false, touch = false, fullscreen = 'unsupported' } = {}) {
+async function client(t, { audio = false, audioThrows = false, webAudio = false, touch = false, fullscreen = 'unsupported', orientationLock = 'unsupported', viewport = { width: 1440, height: 900 } } = {}) {
   const html = await readFile(new URL('../public/index.html', import.meta.url), 'utf8');
-  const ids = new Set([...html.matchAll(/id="([^"]+)"/g)].map(m => m[1])), nodes = new Map(), sources = [], documentListeners = {};
+  const ids = new Set([...html.matchAll(/id="([^"]+)"/g)].map(m => m[1])), nodes = new Map(), sources = [], documentListeners = {}, windowListeners = {}, orientationCalls = [];
   function node(id) {
     if (id && !ids.has(id)) throw Error(`Missing element ${id}`); if (nodes.has(id)) return nodes.get(id);
     const classes = new Set();
@@ -36,6 +36,11 @@ async function client(t, { audio = false, audioThrows = false, webAudio = false,
   }
   const context = { Playback, readMatch, AbortController, createPitch: () => () => {}, performance: { now: () => now }, requestAnimationFrame() {},
     matchMedia: () => ({ matches: touch }),
+    innerWidth: viewport.width, innerHeight: viewport.height, addEventListener(name, fn) { windowListeners[name] = fn; },
+    screen: { orientation: orientationLock === 'unsupported' ? {} : {
+      async lock(value) { orientationCalls.push(value); if (orientationLock === 'rejected') throw new Error('Orientation lock unavailable'); },
+      unlock() { orientationCalls.push('unlock'); },
+    } },
     Audio: audio ? FakeAudio : undefined,
     AudioContext: webAudio ? FakeAudioContext : undefined, setTimeout(fn) { fn(); return 0; },
     document: { body: node(), getElementById: node, createElement: () => node(), createTextNode: text => ({ textContent: text }), addEventListener(name, fn) { documentListeners[name] = fn; } },
@@ -70,7 +75,9 @@ async function client(t, { audio = false, audioThrows = false, webAudio = false,
   const source = (await readFile(new URL('../public/app.js', import.meta.url), 'utf8')).replace(/^import .*;\r?\n/gm, '');
   const api = await vm.runInNewContext(`(async () => { ${source}\nreturn { state: () => ({ game, running, failed, playback }), frame, showEvents: () => logEvents(), dispose: () => controller?.abort() }; })()`, context);
   t.after(() => api.dispose()); await settle();
-  return { api, node, sources, audioInstances, whistleStarts, document: context.document, tick(dt = .05) { now += dt * 1000; api.frame(now); }, key(name, event) { documentListeners[name]?.(event); } };
+  return { api, node, sources, audioInstances, whistleStarts, document: context.document, orientationCalls,
+    resize(width, height) { context.innerWidth = width; context.innerHeight = height; windowListeners.resize?.(); },
+    tick(dt = .05) { now += dt * 1000; api.frame(now); }, key(name, event) { documentListeners[name]?.(event); } };
 }
 test('UI starts without credentials; a single stream supplies all player decisions', async t => {
   const c = await client(t); assert.equal(c.node('start').disabled, false); assert.equal(c.api.state().game.players.length, 22);
@@ -408,5 +415,34 @@ test('touch devices select and reselect shot power using the large button in man
     const plan = source.controls.find(item => item.action === (freeKick ? 'freeKickPlan' : 'manualPlan')).plan;
     assert.ok(Math.abs(plan.power - .44) < 1e-9);
     assert.equal(c.node('manual-timing-control').hidden, true);
+  });
+});
+
+test('mobile fullscreen uses landscape orientation and preserves shot coordinates in the rotated fallback', async t => {
+  for (const orientationLock of ['supported', 'rejected', 'unsupported']) await t.test(orientationLock, async t => {
+    const c = await client(t, { touch: true, fullscreen: 'supported', orientationLock, viewport: { width: 320, height: 568 } });
+    c.node('choose-free-kick').listeners.click(); await settle();
+    c.node('pitch-fullscreen').listeners.click(); await settle();
+    assert.equal(c.node('pitch-view').classList.contains('pitch-rotated'), true);
+    assert.deepEqual(c.orientationCalls, orientationLock === 'unsupported' ? [] : ['landscape']);
+    // The canvas is 600 by 300 before its 90-degree CSS rotation.
+    c.node('pitch').getBoundingClientRect = () => ({ left: 20, top: 30, width: 300, height: 600 });
+    const eventAt = (x, y) => ({ clientX: 320 - (22.5 + y * 3.75), clientY: 30 + 103.125 + x * 3.75, button: 0, pointerId: 1, preventDefault() {} });
+    c.node('pitch').listeners.pointerdown(eventAt(76, 28));
+    c.node('pitch').listeners.pointerdown(eventAt(76, 28)); c.node('pitch').listeners.pointerup(eventAt(107, 34));
+    const length = Math.hypot(31, 6), bow = Math.min(9, length * .22) * .5;
+    c.node('pitch').listeners.pointerdown(eventAt(107, 34));
+    c.node('pitch').listeners.pointerup(eventAt(91.5 - 6 / length * bow, 31 + 31 / length * bow));
+    c.tick(.45); c.node('manual-power-meter').listeners.pointerdown({ pointerType: 'touch', button: 0, preventDefault() {} });
+    assert.equal(c.node('manual-apply').disabled, false);
+    c.resize(844, 390); assert.equal(c.node('pitch-view').classList.contains('pitch-rotated'), false);
+    c.resize(320, 568); assert.equal(c.node('pitch-view').classList.contains('pitch-rotated'), true);
+    c.node('manual-apply').listeners.click(); await settle(); await settle();
+    const plan = c.sources.at(-1).controls.find(item => item.action === 'freeKickPlan').plan;
+    assert.deepEqual(plan.ball, { x: 76, y: 28 }); assert.deepEqual(plan.aim, { x: 107, y: 34 });
+    assert.ok(Math.abs(plan.curve - .5) < 1e-9); assert.ok(Math.abs(plan.power - .65) < 1e-9);
+    await c.document.exitFullscreen();
+    assert.equal(c.node('pitch-view').classList.contains('pitch-rotated'), false);
+    assert.deepEqual(c.orientationCalls, orientationLock === 'supported' ? ['landscape', 'unlock'] : orientationLock === 'rejected' ? ['landscape'] : []);
   });
 });

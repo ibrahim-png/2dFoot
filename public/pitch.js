@@ -18,8 +18,9 @@ const freeKickLayout = (ball, wallCount) => {
 export function createPitch(canvas) {
   const ctx = canvas.getContext('2d'); let width = 1, height = 1;
   const resize = () => {
-    const bounds = canvas.getBoundingClientRect(), dpr = Math.min(devicePixelRatio || 1, 2);
-    width = bounds.width; height = bounds.height; canvas.width = Math.round(width * dpr); canvas.height = Math.round(height * dpr);
+    const dpr = Math.min(devicePixelRatio || 1, 2);
+    // CSS rotation changes the screen bounds, not the canvas drawing axes.
+    width = canvas.clientWidth; height = canvas.clientHeight; canvas.width = Math.round(width * dpr); canvas.height = Math.round(height * dpr);
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   };
   new ResizeObserver(resize).observe(canvas); resize();

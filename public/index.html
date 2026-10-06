@@ -1,0 +1,130 @@
+<!doctype html>
+<html lang="tr">
+<head>
+  <meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="color-scheme" content="dark"><title>2D Football — Maç Merkezi</title>
+  <link rel="icon" href="data:,"><link rel="stylesheet" href="/style.css"><script type="module" src="/app.js"></script>
+</head>
+<body>
+  <header class="topbar"><a class="brand" href="/" aria-label="2D Football ana sayfa"><span class="brand-mark">Ⅱ</span> 2D<span>FOOTBALL</span><span class="lab-badge">MATCH</span></a><div class="top-right"><span class="connection-dot" id="connection-dot"></span><span id="connection-label">Yerel sunucuya bağlanılıyor</span><span class="version">PROTOTİP / 04</span></div></header>
+  <div class="mode-gate" id="mode-gate" role="dialog" aria-modal="true" aria-labelledby="mode-gate-title"><div class="mode-gate-card"><span class="eyebrow"><span></span> MAÇ KURULUMU</span><h2 id="mode-gate-title">Nasıl oynamak istiyorsun?</h2><p>Maç ekranına geçmeden önce bir mod seç.</p><div class="mode-gate-grid"><button id="choose-normal" type="button">Normal mod<small>22 oyuncunun kararlarını izle</small></button><button id="choose-manual" type="button">Sen oyna<small>Lime FC hücumlarını yönet</small></button><button id="choose-online" type="button">Sen oyna online<small>Oda numarasıyla iki oyuncu</small></button><button id="choose-debug" type="button">Debug mod<small>Her pas kararını incele</small></button><button id="choose-free" type="button">Free mod<small>Tekrarlanan hücum çalışması</small></button><button id="choose-free-kick" type="button">Free kick<small>Serbest vuruş çalışması</small></button></div></div></div>
+  <main>
+    <section class="intro"><div><div class="eyebrow"><span></span> FUTBOL SİMÜLASYONU</div><h1>22 oyuncu. <em>22 ayrı karar.</em></h1><p>Takımların dizilişini seç. Her oyuncu sahayı kendi mevkisinden okur.</p></div><div class="session-tag"><span>HAZIRLIK MAÇI</span><strong>11 × 11 · 5 dakika ↗</strong></div></section>
+    <div class="workspace">
+      <section class="main-column" aria-label="Maç sahası">
+        <div class="scoreboard" aria-label="Skor tabelası" aria-live="polite"><div class="team home"><span class="team-crest">L</span><div><strong>Lime FC</strong><small id="home-formation-label">4-4-2 · HÜCUM →</small></div></div><div class="score"><strong id="home-score">0</strong><span>:</span><strong id="away-score">0</strong></div><div class="team away"><div><strong>Coral United</strong><small id="away-formation-label">← HÜCUM · 4-4-2</small></div><span class="team-crest">C</span></div></div>
+        <div class="stats" id="top-stats"><div><span>SÜRE <small>/ 05:00</small></span><strong id="clock">00:00</strong></div><div><span>PAS <small>LIME / CORAL</small></span><strong id="passes">0 / 0</strong></div><div id="decision-stat"><span>OYUNCU KARARI</span><strong id="decisions">0</strong></div><div id="segment-stat"><span>OYUN BÖLÜMÜ</span><strong id="segments">1</strong></div></div>
+        <div class="pitch-card"><div class="pitch-header"><span class="live-label" id="state-label"><i></i> HAZIRLANIYOR</span><span><span id="pitch-formations">4-4-2 / 4-4-2</span> <b>•</b> 105 × 68 m</span></div><div class="pitch-stage" id="pitch-stage"><canvas id="pitch" aria-label="İki takımın 2D futbol sahası"></canvas><button class="primary pitch-plan-apply" id="manual-apply" type="button" disabled hidden>Planı uygula ve oynat</button><div class="match-event-overlay" id="event-overlay" role="status" aria-live="polite" aria-atomic="true" hidden><div class="match-event-banner"><strong id="event-title"></strong><span id="event-detail"></span></div></div><div class="goal-overlay" id="goal-overlay" role="status" aria-live="polite" aria-atomic="true" hidden><div class="goal-banner"><div class="goal-card-head"><span id="goal-detail"></span><button id="goal-close" type="button" aria-label="Gol görselini kapat">×</button></div><strong>GOAL!</strong><div class="goal-scene" aria-label="Topun kaleye giriş noktası"><div class="goal-mouth"></div><span class="goal-ball-marker" id="goal-ball-marker">⚽</span></div><span id="goal-location"></span></div></div><div class="exit-overlay" id="exit-overlay" role="status" aria-live="polite" aria-atomic="true" hidden><div class="exit-banner"><div class="exit-card-head"><span id="exit-team"></span><button id="exit-close" type="button" aria-label="Topun çıkış görselini kapat">×</button></div><strong id="exit-title">AUT</strong><div class="exit-scene" aria-label="Topun kale çizgisinden çıktığı nokta"><div class="exit-goal"></div><div class="exit-penalty-box"></div><div class="exit-goal-line"></div><span class="exit-ball-marker" id="exit-ball-marker">⚽</span></div><span id="exit-location"></span></div></div><div class="final-overlay" id="final-overlay" role="dialog" aria-modal="true" aria-labelledby="final-title" hidden><div class="final-card"><div class="final-head"><span>MAÇ SONU</span><button id="final-close" type="button" aria-label="Maç sonu istatistiklerini kapat">×</button></div><h2 id="final-title">Maç tamamlandı</h2><strong id="final-score">0 – 0</strong><p id="final-result"></p><div class="final-stats"><span>İstatistik</span><b>Lime</b><b>Coral</b><span>Topla oynama</span><b id="final-possession-home">%50</b><b id="final-possession-away">%50</b><span>Pas</span><b id="final-passes-home">0</b><b id="final-passes-away">0</b><span>Şut</span><b id="final-shots-home">0</b><b id="final-shots-away">0</b><span>Kurtarış</span><b id="final-saves-home">0</b><b id="final-saves-away">0</b><span>Top kazanma</span><b id="final-tackles-home">0</b><b id="final-tackles-away">0</b><span>Faul</span><b id="final-fouls-home">0</b><b id="final-fouls-away">0</b><span>Kartlar</span><b id="final-cards-home">0</b><b id="final-cards-away">0</b></div></div></div></div><div class="pitch-footer"><span id="pitch-caption">Lime FC → 4–4–2 × 4–4–2 ← Coral United</span><div class="pitch-tools"><button class="sound-toggle" id="stadium-sound" type="button" aria-pressed="true">🔊 Stadyum sesi</button><label><input type="checkbox" id="show-paths" checked> Top izleri</label></div></div></div>
+        <div class="controls"><button class="primary" id="start" disabled>▶ Maçı başlat</button><button class="secondary" id="step" disabled>10 sn oynat</button><button class="secondary" id="reset">Yeni maç</button></div>
+        <section class="panel manual-panel" id="manual-panel" hidden aria-labelledby="manual-title">
+          <div class="section-heading"><h2 id="manual-title">Sen oyna · Lime FC</h2><span class="tiny-badge">HÜCUM PLANI</span></div>
+          <p id="manual-status">Top sahibi değişti. Sarı oyunculardan çizgi çekerek hücumu planla.</p>
+          <p class="hint"><b>Pas:</b> Alıcı olacak sarı oyuncuya çift tıkla, sonra top sahibinden pas hedefini çiz. <b>Şut:</b> Alıcı seçmeden top sahibinden kaleye çizgi çek. <b>Falso:</b> Yön oku hazırken okun ucuna basıp yana sürükle. <b>Güç:</b> Topa vuran oyuncunun yanında beliren hareketli göstergeye istediğin seviyede sol tıkla. <b>Top sürme:</b> Henüz hedef ve alıcı yokken <kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> tuşlarından birine bas; tuşları basılı tutarak anlık yön ver. Top sürerken pas veya şut kararı vermek için <kbd>Space</kbd> tuşuna bas.</p>
+          <div class="free-kick-controls" id="free-kick-controls" hidden>
+            <div class="free-kick-buttons"><button class="secondary" id="free-kick-ball" type="button">Topun yerini seç</button></div>
+            <label>Barajdaki oyuncu sayısı <output id="free-kick-wall-count-value">4</output><input id="free-kick-wall-count" type="range" min="1" max="6" step="1" value="4"></label>
+            <label>Vuruşçunun şut gücü <output id="free-kick-shot-power-value">30 / 40</output><input id="free-kick-shot-power" type="range" min="20" max="40" step="1" value="30"></label>
+            <label>Vuruşçunun falso gücü <output id="free-kick-curve-power-value">%70</output><input id="free-kick-curve-power" type="range" min="20" max="100" step="1" value="70"></label>
+            <p class="hint">Topun yerini sahaya tıkla. Baraj, yakın direk hattında topun 9,15 metre önüne otomatik yerleşir; yalnızca oyuncu sayısını değiştirirsin. Topun üzerinden şut yönünü çiz. Oyuncu şut gücü top hızını, falso gücü kıvrımı belirler. Şut yüksekliğini sistem baraj ve kale mesafesine göre otomatik hesaplar.</p>
+          </div>
+          <div class="manual-kick-controls">
+            <div class="manual-auto-action"><span>Sistem tarafından seçilen aksiyon</span><strong id="manual-action-label">Şut</strong></div>
+            <div class="manual-slider-controls" id="manual-slider-controls">
+              <label>Şut gücü <output id="manual-power-value">%100</output><input id="manual-power" type="range" min="30" max="100" step="1" value="100"></label>
+              <label>Falso <output id="manual-curve-value">Düz</output><input id="manual-curve" type="range" min="-100" max="100" step="5" value="0"></label>
+            </div>
+            <div class="manual-timing-control" id="manual-timing-control" hidden>
+              <button class="power-meter" id="manual-power-meter" type="button" aria-label="Hareketli güç göstergesini mevcut seviyede durdur">
+                <span class="power-meter-fill" id="manual-power-fill"></span><span class="power-meter-marker" id="manual-power-marker"></span>
+              </button>
+              <div><strong>Vuruş gücü <output id="manual-timed-power-value">%30</output></strong><p>Gösterge aşağı yukarı hareket ederken sol tıkla. Tıkladığın seviye vuruş gücü olur; tekrar tıklarsan yeniden hareket eder.</p></div>
+            </div>
+          </div>
+          <div class="manual-actions"><button class="secondary" id="manual-clear" type="button">Çizimleri temizle</button></div>
+        </section>
+        <div class="notice" id="notice" role="alert" hidden></div>
+        <section class="panel decision-panel" id="decision-panel" aria-labelledby="decision-title">
+          <div class="section-heading"><h2 id="decision-title">Karar ekranı</h2><span class="tiny-badge">22 AYRI OYUNCU</span></div>
+          <div class="decision-toolbar"><label for="decision-player">Oyuncu</label><select id="decision-player"></select><button class="secondary" id="decision-pause">Duraklat ve incele</button><button class="primary" id="decision-next" disabled>Sonraki karar</button></div>
+          <p class="hint">Otomatik seçim, topa sahip oyuncuyu; top hareket halindeyken son pası veya şutu kullanan oyuncuyu takip eder.</p>
+          <p id="decision-summary" aria-live="polite">Saha hazırlanıyor.</p>
+          <p class="hint" id="decision-cadence">Karar: yaklaşık 0,2 sn · Fizik: 0,025 sn · Görüntü: 0,05 sn. Top sahipliği ve önemli olaylar erken analiz tetikler. Bütün hesaplar yerel.</p>
+          <p class="hint" id="decision-timing"></p>
+          <h3>Ne yapacağına nasıl karar verdi?</h3>
+          <p class="hint" id="decision-ball"></p>
+          <div class="debug-table-wrap"><table class="debug-table decision-table"><thead><tr><th>Öncelik / seçenek</th><th>Sonuç</th><th>Hesap ve koşullar</th></tr></thead><tbody id="decision-actions"></tbody></table></div>
+          <h3>Nereye hareket edecek?</h3>
+          <p class="hint">u: kendi kalesinden rakip kaleye doğru mesafe; v: kendi solundan sağına. İki takımda da 0–105 / 0–68 m. Kısıtla: değeri belirtilen alt ve üst sınırda tut.</p>
+          <div class="debug-table-wrap"><table class="debug-table decision-table"><thead><tr><th>Hesap adımı</th><th>Değer / neden</th></tr></thead><tbody id="decision-movement"></tbody></table></div>
+          <p class="hint">Sonraki karar yalnızca seçili oyuncunun yeni değerlendirmesine kadar oynatır. Debug modda araya giren pas öncesi duraklama korunur.</p>
+        </section>
+        <section class="panel debug-panel" id="debug-panel" hidden aria-labelledby="debug-title">
+          <div class="section-heading"><h2 id="debug-title">Pas kararı · Debug mod</h2><span class="tiny-badge">PAS ÖNCESİ</span></div>
+          <p id="debug-summary" aria-live="polite">İlk pas bekleniyor. Her pas çıkmadan görüntü durur.</p>
+          <p class="hint" id="debug-context"></p>
+          <div class="debug-table-wrap"><table class="debug-table"><thead><tr><th>Oyuncu</th><th>Mesafe / ilerleme</th><th>Normal pas hesabı</th><th>Gol fırsatı hesabı</th><th>Karar / elenme nedeni</th></tr></thead><tbody id="debug-options"></tbody></table></div>
+          <p class="hint">Normal puan = pasın hedeflediği ilerleme × 0,055 × görüş + min(boş alan, 8) × 0,1 − mesafe × 0,017 − kaleciye pas için 0,5. Açık ara pasında hedef, oyuncunun ayağı yerine kaleye gidiş yoludur. Gol fırsatı varış noktasındaki şut kalitesini de değerlendirir. Puanlar gol olasılığı değildir.</p>
+          <button class="primary" id="debug-next" disabled>Pası oynat · Sonraki pasa kadar</button>
+        </section>
+        <section class="panel log-panel" id="log-panel"><div class="section-heading"><h2>Maç günlüğü</h2><span class="tiny-badge">SAHADAN</span></div><div id="pass-log"><div class="empty-log">Başlama düdüğü bekleniyor.</div></div></section>
+      </section>
+      <aside>
+        <section class="panel telemetry player-panel"><div class="section-heading"><h2>Oyuncu kartı</h2><span class="tiny-badge">CANLI</span></div>
+          <label class="field-label" for="selected-player">Oyuncuyu izle</label><select id="selected-player" aria-label="Kararı izlenecek oyuncu"></select>
+          <div class="player-card-title"><strong id="player-card-name">—</strong><span id="player-card-role">—</span></div>
+          <div class="trait-grid">
+            <article><span>Şut gücü</span><strong id="trait-shot-power">—</strong><small>menzil</small></article>
+            <article><span>Şut isabeti</span><strong id="trait-shot-accuracy">—</strong><small>vuruş sapması</small></article>
+            <article><span>Pas isabeti</span><strong id="trait-pass-accuracy">—</strong><small>pas sapması</small></article>
+            <article><span>Hız</span><strong id="trait-pace">—</strong><small id="trait-pace-detail">azami hız etkisi</small></article>
+            <article class="stamina-card"><span>Dayanıklılık</span><strong id="trait-stamina">—</strong><small>anlık enerji <b id="player-energy">%100</b></small></article>
+          </div>
+          <dl><div><dt>Mevki</dt><dd id="player-role">—</dd></div><div><dt>Hareket</dt><dd id="player-action">—</dd></div><div><dt>Pas hedefi</dt><dd id="player-target">—</dd></div><div><dt>Karar sayısı</dt><dd id="player-thoughts">0</dd></div></dl><p class="hint" id="player-reason">Oyuncunun karar nedeni burada görünür.</p>
+        </section>
+        <section class="panel speed-panel" id="speed-panel"><div class="section-heading"><h2>Oyuncu hızları ve özellikleri</h2><span class="tiny-badge">MAÇ İÇİ</span></div>
+          <p class="hint">Değerler temel azami hızdır. En hızlı oyuncunun katsayısı en yavaş oyuncudan %30 fazladır.</p>
+          <label for="speed-on-ball"><span>Toplu saha oyuncusu</span><output id="speed-on-ball-value">4,9 m/sn · 15,3–20,0 km/sa</output></label>
+          <input id="speed-on-ball" type="range" min="3" max="9" step="0.1" value="4.9">
+          <label for="speed-off-ball"><span>Topsuz hareket</span><output id="speed-off-ball-value">5,7 m/sn · 17,9–23,2 km/sa</output></label>
+          <input id="speed-off-ball" type="range" min="3" max="9" step="0.1" value="5.7">
+          <label for="speed-sprint"><span>Depar</span><output id="speed-sprint-value">7,1 m/sn · 22,2–28,9 km/sa</output></label>
+          <input id="speed-sprint" type="range" min="3" max="9" step="0.1" value="7.1">
+          <label for="speed-keeper"><span>Kaleci</span><output id="speed-keeper-value">4,8 m/sn · 15,0–19,5 km/sa</output></label>
+          <input id="speed-keeper" type="range" min="3" max="9" step="0.1" value="4.8">
+          <div class="speed-actions"><button class="secondary" id="speed-reset" type="button">Varsayılan hızlar</button><span id="speed-status" aria-live="polite">Hazır</span></div>
+          <div class="roster-table-wrap"><table class="roster-table" aria-label="Tüm oyuncuların özellikleri ve enerjileri"><thead><tr><th>Oyuncu</th><th>Mevki</th><th>Şut gücü</th><th>Şut isabeti</th><th>Pas isabeti</th><th>Hız</th><th>Dayanıklılık</th><th>Enerji</th></tr></thead><tbody id="player-roster"></tbody></table></div>
+          <p class="hint energy-legend"><span>Enerji:</span> %0 <span class="energy-gradient"></span> %100 <b>· %60 altında yüksek eforla 12 saniye sakatlık riski</b></p>
+          <p class="hint">Kontra yerleşimi normal topsuz hızı kullanır. Savunmaya dönüş, pres, boş topa koşu ve açık ara pası koşusu depar hızını kullanır. Değişiklik hazırlanmış en fazla yaklaşık 1 saniyelik görüntüden sonra sahaya yansır.</p>
+        </section>
+        <section class="panel telemetry formation-panel"><div class="section-heading"><h2>Takım düzeni</h2><span class="tiny-badge">MAÇ ÖNCESİ</span></div>
+          <label class="field-label" for="match-mode">Maç modu</label>
+          <select id="match-mode"><option value="normal" selected>Normal mod</option><option value="debug">Debug mod · Her pası incele</option><option value="manual">Sen oyna · Lime FC'yi yönet</option><option value="online">Sen oyna online · İki oyuncu</option><option value="free">Free mod · Tekrarlanan hücum çalışması</option><option value="freeKick">Free kick · Serbest vuruş çalışması</option></select>
+          <div class="online-room-setup" id="online-room-setup" hidden>
+            <button class="primary" id="online-create" type="button">Oda oluştur</button>
+            <div class="online-join-row"><input id="online-room-code" type="text" inputmode="numeric" maxlength="6" placeholder="6 haneli oda numarası" aria-label="Oda numarası"><button class="secondary" id="online-join" type="button">Odaya katıl</button></div>
+            <div class="online-room-code" id="online-room-result" hidden><span>ODA NUMARASI</span><strong id="online-room-number"></strong><button class="secondary" id="online-copy" type="button">Kopyala</button></div>
+            <p class="hint" id="online-room-status">Bir oyuncu oda oluşturur ve çıkan numarayı arkadaşına gönderir. İkinci oyuncu aynı sunucu adresinden oda numarasıyla katılır.</p>
+          </div>
+          <div class="free-mode-setup" id="free-mode-setup" hidden>
+            <label>Sarı oyuncu sayısı <output id="free-home-count-value">6</output><input id="free-home-count" type="range" min="1" max="11" step="1" value="6"></label>
+            <label>Rakip oyuncu sayısı <output id="free-away-count-value">6</output><input id="free-away-count" type="range" min="0" max="11" step="1" value="6"></label>
+            <p class="hint">Sarı takım topla başlar. Top kaybında, golde veya top dışarı çıktığında aynı başlangıç hücumu yeniden kurulur.</p>
+          </div>
+          <label class="field-label" for="home-formation">Lime FC · Ev sahibi</label>
+          <select id="home-formation"><option value="4-4-2" selected>4-4-2 · Çift forvet</option><option value="4-3-3">4-3-3 · Üçlü hücum</option><option value="4-2-3-1">4-2-3-1 · Çift ön libero</option><option value="3-5-2">3-5-2 · Kanat bekler</option></select>
+          <p class="hint formation-roles" id="home-role-list"></p>
+          <label class="field-label" for="away-formation">Coral United · Deplasman</label>
+          <select id="away-formation"><option value="4-4-2" selected>4-4-2 · Çift forvet</option><option value="4-3-3">4-3-3 · Üçlü hücum</option><option value="4-2-3-1">4-2-3-1 · Çift ön libero</option><option value="3-5-2">3-5-2 · Kanat bekler</option></select>
+          <p class="hint formation-roles" id="away-role-list"></p>
+          <p class="hint" id="formation-hint">İki takımın dizilişini ayrı seç. Yerleşim sahada güncellenir.</p>
+          <dl><div><dt>Lime FC</dt><dd id="home-phase">Hücum</dd></div><div><dt>Coral United</dt><dd id="away-phase">Savunma</dd></div></dl>
+        </section>
+        <section class="panel telemetry" id="match-statistics-panel"><div class="section-heading"><h2>Maç istatistikleri</h2><span class="tiny-badge">LIME / CORAL</span></div><dl><div><dt>Topla oynama</dt><dd id="possession">%50 / %50</dd></div><div><dt>Şut</dt><dd id="shots">0 / 0</dd></div><div><dt>Uzaktan şut</dt><dd id="long-shots">0 / 0</dd></div><div><dt>Kurtarış</dt><dd id="saves">0 / 0</dd></div><div><dt>Top kazanma</dt><dd id="tackles">0 / 0</dd></div><div><dt>Faul</dt><dd id="fouls">0 / 0</dd></div><div><dt>Sarı kart</dt><dd id="yellow-cards">0 / 0</dd></div><div><dt>Kırmızı kart</dt><dd id="red-cards">0 / 0</dd></div><div><dt>Sakatlık</dt><dd id="injuries">0 / 0</dd></div><div><dt>Ofsayt</dt><dd id="offsides">0 / 0</dd></div></dl></section>
+        
+        <section class="panel telemetry" id="local-engine-panel"><div class="section-heading"><h2>Yerel maç motoru</h2><span class="tiny-badge">API ÜCRETİ YOK</span></div><dl><div><dt>Hazır görüntü</dt><dd id="buffer-count">0 sn</dd></div><div><dt>Maç tohumu</dt><dd id="seed">—</dd></div></dl><p class="hint">Oyun bilgisayarında hesaplanır. Maçı duraklatıp kaldığın yerden sürdürebilirsin.</p></section>
+        <div class="aside-note"><span>05 / KARAR ANALİZİ</span><p>Mevki. Algı. Karar.</p><p class="hint">Kurallar 2D oyuncu merkezlerine göre hesaplanır. Görüş engelleme ve avantaj henüz modellenmez.</p></div>
+      </aside>
+    </div><footer><span>2D FOOTBALL LAB</span><span>Yerel karar motoru · Sonuçlar saha fiziğinden</span></footer>
+  </main>
+</body>
+</html>

@@ -1,0 +1,15 @@
+{
+  "name": "2d-football-lab",
+  "version": "2.0.0",
+  "private": true,
+  "type": "module",
+  "description": "22 independent players, local backend football simulation, 4-4-2",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node --watch server.js",
+    "test": "node --test"
+  }
+}

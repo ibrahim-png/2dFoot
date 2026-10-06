@@ -35,7 +35,7 @@ async function client(t, { audio = false, audioThrows = false, webAudio = false 
   const context = { Playback, readMatch, AbortController, createPitch: () => () => {}, performance: { now: () => now }, requestAnimationFrame() {},
     Audio: audio ? FakeAudio : undefined,
     AudioContext: webAudio ? FakeAudioContext : undefined, setTimeout(fn) { fn(); return 0; },
-    document: { getElementById: node, createElement: () => node(), createTextNode: text => ({ textContent: text }), addEventListener(name, fn) { documentListeners[name] = fn; } },
+    document: { body: { classList: { remove() {} } }, getElementById: node, createElement: () => node(), createTextNode: text => ({ textContent: text }), addEventListener(name, fn) { documentListeners[name] = fn; } },
     fetch: async (url, options) => {
       assert.equal(options.method, 'POST'); const request = JSON.parse(options.body);
       if (url === '/api/match/control') {
@@ -273,10 +273,23 @@ test('online mode opens the room-code lobby without starting a separate local ma
   for (const id of ['decision-stat', 'segment-stat', 'speed-panel', 'decision-panel', 'log-panel', 'local-engine-panel']) assert.equal(c.node(id).hidden, true);
   for (const id of ['player-roster', 'home-formation', 'match-statistics-panel', 'pitch']) assert.equal(c.node(id).hidden, false);
 });
-test('the first screen requires choosing a match mode', async t => {
-  const c = await client(t); assert.equal(c.node('mode-gate').hidden, false);
-  c.node('choose-online').listeners.click(); await settle();
-  assert.equal(c.node('mode-gate').hidden, true); assert.equal(c.node('match-mode').value, 'online'); assert.equal(c.node('online-room-setup').hidden, false);
+test('every opening-screen choice loads its mode or the online lobby', async t => {
+  for (const [id, mode] of [['normal', 'normal'], ['manual', 'manual'], ['online', 'online'], ['debug', 'debug'], ['free', 'free'], ['free-kick', 'freeKick']]) {
+    await t.test(mode, async t => {
+      const c = await client(t); assert.equal(c.node('mode-gate').hidden, false);
+      const before = c.sources.length;
+      c.node(`choose-${id}`).listeners.click(); await settle();
+      assert.equal(c.node('mode-gate').hidden, true); assert.equal(c.node('match-mode').value, mode);
+      assert.equal(c.api.state().failed, false);
+      if (mode === 'online') {
+        assert.equal(c.node('online-room-setup').hidden, false); assert.equal(c.sources.length, before);
+      } else {
+        assert.equal(c.sources.length, before + 1); assert.equal(c.sources.at(-1).request.mode, mode);
+        assert.equal(c.node('online-room-setup').hidden, true);
+        assert.equal(c.node('manual-panel').hidden, !['manual', 'free', 'freeKick'].includes(mode));
+      }
+    });
+  }
 });
 
 test('Sen oyna top sürme continues until Space requests a new backend decision point', async t => {

@@ -527,7 +527,8 @@ $('online-copy').addEventListener('click', () => {
 });
 const initialModes = { 'choose-normal': 'normal', 'choose-manual': 'manual', 'choose-online': 'online', 'choose-debug': 'debug', 'choose-free': 'free', 'choose-free-kick': 'freeKick' };
 for (const [id, mode] of Object.entries(initialModes)) $(id).addEventListener('click', () => {
-  $('match-mode').value = mode; $('mode-gate').hidden = true; updateFreeModeControls(); updateModeLayout(mode); void loadMatch();
+  $('match-mode').value = mode; $('mode-gate').hidden = true; document.body.classList.remove('choosing-mode');
+  updateFreeModeControls(); updateModeLayout(mode); void loadMatch();
 });
 document.addEventListener('keydown', event => {
   const editing = ['INPUT', 'SELECT', 'TEXTAREA'].includes(event.target?.tagName) || event.target?.isContentEditable;

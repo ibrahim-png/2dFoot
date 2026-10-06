@@ -1,13 +1,27 @@
 <!doctype html>
 <html lang="tr">
 <head>
-  <meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
   <meta name="color-scheme" content="dark"><title>2D Football — Maç Merkezi</title>
   <link rel="icon" href="data:,"><link rel="stylesheet" href="/style.css"><script type="module" src="/app.js"></script>
 </head>
-<body>
+<body class="choosing-mode">
   <header class="topbar"><a class="brand" href="/" aria-label="2D Football ana sayfa"><span class="brand-mark">Ⅱ</span> 2D<span>FOOTBALL</span><span class="lab-badge">MATCH</span></a><div class="top-right"><span class="connection-dot" id="connection-dot"></span><span id="connection-label">Yerel sunucuya bağlanılıyor</span><span class="version">PROTOTİP / 04</span></div></header>
-  <div class="mode-gate" id="mode-gate" role="dialog" aria-modal="true" aria-labelledby="mode-gate-title"><div class="mode-gate-card"><span class="eyebrow"><span></span> MAÇ KURULUMU</span><h2 id="mode-gate-title">Nasıl oynamak istiyorsun?</h2><p>Maç ekranına geçmeden önce bir mod seç.</p><div class="mode-gate-grid"><button id="choose-normal" type="button">Normal mod<small>22 oyuncunun kararlarını izle</small></button><button id="choose-manual" type="button">Sen oyna<small>Lime FC hücumlarını yönet</small></button><button id="choose-online" type="button">Sen oyna online<small>Oda numarasıyla iki oyuncu</small></button><button id="choose-debug" type="button">Debug mod<small>Her pas kararını incele</small></button><button id="choose-free" type="button">Free mod<small>Tekrarlanan hücum çalışması</small></button><button id="choose-free-kick" type="button">Free kick<small>Serbest vuruş çalışması</small></button></div></div></div>
+  <div class="mode-gate" id="mode-gate" role="dialog" aria-modal="true" aria-labelledby="mode-gate-title" aria-describedby="mode-gate-description">
+    <div class="mode-gate-card">
+      <span class="eyebrow"><span></span> MAÇ KURULUMU</span>
+      <h2 id="mode-gate-title">Oyun senin.<br><em>Modunu seç.</em></h2>
+      <p id="mode-gate-description">Maçı izle, takımını yönet ya da arkadaşınla oyna.</p>
+      <div class="mode-gate-grid">
+        <button id="choose-normal" type="button"><span class="mode-number" aria-hidden="true">01</span><span class="mode-copy"><strong>Normal mod</strong><small>22 oyuncunun kararlarını izle</small></span><span class="mode-arrow" aria-hidden="true">↗</span></button>
+        <button id="choose-manual" type="button"><span class="mode-number" aria-hidden="true">02</span><span class="mode-copy"><strong>Sen oyna</strong><small>Lime FC hücumlarını yönet</small></span><span class="mode-arrow" aria-hidden="true">↗</span></button>
+        <button id="choose-online" type="button"><span class="mode-number" aria-hidden="true">03</span><span class="mode-copy"><strong>Sen oyna online</strong><small>Oda numarasıyla iki oyuncu</small></span><span class="mode-arrow" aria-hidden="true">↗</span></button>
+        <button id="choose-debug" type="button"><span class="mode-number" aria-hidden="true">04</span><span class="mode-copy"><strong>Debug mod</strong><small>Her pas kararını incele</small></span><span class="mode-arrow" aria-hidden="true">↗</span></button>
+        <button id="choose-free" type="button"><span class="mode-number" aria-hidden="true">05</span><span class="mode-copy"><strong>Free mod</strong><small>Tekrarlanan hücum çalışması</small></span><span class="mode-arrow" aria-hidden="true">↗</span></button>
+        <button id="choose-free-kick" type="button"><span class="mode-number" aria-hidden="true">06</span><span class="mode-copy"><strong>Free kick</strong><small>Serbest vuruş çalışması</small></span><span class="mode-arrow" aria-hidden="true">↗</span></button>
+      </div>
+    </div>
+  </div>
   <main>
     <section class="intro"><div><div class="eyebrow"><span></span> FUTBOL SİMÜLASYONU</div><h1>22 oyuncu. <em>22 ayrı karar.</em></h1><p>Takımların dizilişini seç. Her oyuncu sahayı kendi mevkisinden okur.</p></div><div class="session-tag"><span>HAZIRLIK MAÇI</span><strong>11 × 11 · 5 dakika ↗</strong></div></section>
     <div class="workspace">

@@ -13,6 +13,8 @@ let matchId = null, chunkRequested = false, requestedSpeeds = null;
 let lastAutoPlayerId = 10;
 let matchMode = 'normal', manualDraft = null, manualDrag = null, applyingManual = false, manualStopRequested = false;
 let manualMeterPower = .3;
+let pitchExpanded = false, fullscreenPending = false;
+let powerPointerHandled = false;
 let onlineRoomCode = null, onlinePlayerToken = null, onlineTeam = null, onlineRoomReady = false;
 const manualKeys = new Set(), DRIVE_KEYS = { KeyA: [-1, 0], KeyS: [0, 1], KeyD: [1, 0], KeyW: [0, -1] };
 const rosterCells = new Map();
@@ -106,6 +108,30 @@ function toggleStadiumSound() {
     for (const audio of [stadiumAudio, goalAudio, dangerAudio, shotAudio, kickAudio]) stopMatchSound(audio, false);
     shotRoarActive = false;
   }
+}
+function setPitchExpanded(expanded) {
+  pitchExpanded = expanded;
+  $('pitch-view').classList.toggle('pitch-expanded', expanded);
+  document.body.classList.toggle('pitch-is-expanded', expanded);
+  $('pitch-fullscreen').textContent = expanded ? '⤡ Küçült' : '⤢ Tam ekran';
+  $('pitch-fullscreen').setAttribute('aria-pressed', String(expanded));
+}
+async function togglePitchFullscreen() {
+  if (fullscreenPending) return;
+  fullscreenPending = true;
+  const view = $('pitch-view');
+  try {
+    if (pitchExpanded) {
+      if (document.fullscreenElement === view) await document.exitFullscreen();
+      setPitchExpanded(false);
+    } else {
+      setPitchExpanded(true);
+      // Keep the in-page expanded view on browsers without element fullscreen.
+      if (view.requestFullscreen) await view.requestFullscreen();
+    }
+  } catch {
+    if (document.fullscreenElement === view) setPitchExpanded(true);
+  } finally { fullscreenPending = false; }
 }
 function notice(text = '') { $('notice').textContent = text; $('notice').hidden = !text; }
 Object.assign(eventNames, { offside: 'OFSAYT', indirectFreeKick: 'ENDİREKT SERBEST VURUŞ' });
@@ -216,7 +242,6 @@ function updateManualPanel(message = '') {
   $('manual-panel').hidden = !manualDraft; $('pitch-stage').classList.toggle('manual-drawing', !!manualDraft);
   $('manual-apply').hidden = !manualDraft;
   $('free-kick-controls').hidden = manualDraft?.kind !== 'freeKick';
-  $('manual-timing-control').hidden = true;
   if (manualDraft?.kind === 'freeKick') {
     $('manual-title').textContent = 'Free kick · Lime FC';
     const powerState = manualDraft.powerLocked ? `güç %${Math.round(manualDraft.power * 100)}` : 'güç seçimi bekleniyor';
@@ -228,7 +253,7 @@ function updateManualPanel(message = '') {
     const powerState = manualDraft.action === 'dribble' ? '' : manualDraft.powerLocked ? ` · güç %${Math.round(manualDraft.power * 100)}` : manualDraft.aim ? ' · güç seçimi bekleniyor' : '';
     $('manual-status').textContent = message || `${teamName} ${shirt(owner?.id)} topun başında · ${runCount} koşu çizildi · ${manualDraft.aim ? `${manualDraft.action === 'shoot' ? 'şut' : manualDraft.action === 'dribble' ? 'top sürme' : 'pas'} hedefi hazır` : 'hedef bekleniyor'}${powerState}${manualDraft.action === 'pass' ? ` · ${manualDraft.passTo ? `${shirt(manualDraft.passTo)} alıcı` : 'alıcı seçimi isteğe bağlı'}` : ''}`;
   }
-  controls();
+  updateManualPowerMeter(); controls();
 }
 function openManualControl(frame = playback.manualPause) {
   if (!frame?.manualControl) return;
@@ -273,7 +298,9 @@ function updateManualKickControls() {
     updateManualPanel();
   }
 }
+const useLargePowerMeter = () => !!globalThis.matchMedia?.('(any-pointer: coarse)').matches || globalThis.innerWidth <= 780;
 function updateManualPowerMeter(now = performance.now()) {
+  $('manual-timing-control').hidden = !useLargePowerMeter() || !manualDraft?.aim || manualDraft.action === 'dribble';
   if (!manualDraft || manualDraft.action === 'dribble') return;
   if (!manualDraft.powerLocked) {
     const elapsed = Math.max(0, now - (manualDraft.meterStartedAt ?? now)), phase = elapsed % 1800 / 1800;
@@ -284,6 +311,10 @@ function updateManualPowerMeter(now = performance.now()) {
   $('manual-power-fill').style.height = `${percent}%`; $('manual-power-marker').style.bottom = `${percent}%`;
   $('manual-timed-power-value').textContent = `%${percent}`;
   $('manual-power-meter').classList.toggle('locked', !!manualDraft.powerLocked);
+  $('manual-power-meter').setAttribute('aria-pressed', String(!!manualDraft.powerLocked));
+  $('manual-power-meter').setAttribute('aria-label', `Vuruş gücü %${percent}. ${manualDraft.powerLocked ? 'Yeniden seçmek için dokun' : 'Bu seviyede durdurmak için dokun'}.`);
+  $('manual-power-hint').textContent = manualDraft.powerLocked ? '✓ Seçildi' : 'Gücü seç';
+  $('manual-timing-control').classList.toggle('power-on-right', (manualKickSource()?.x ?? 105) < 52.5);
 }
 function selectManualPower(event) {
   if (event?.button !== undefined && event.button !== 0 || !manualDraft || manualDraft.action === 'dribble') return;
@@ -307,7 +338,7 @@ function manualKickSource() {
   return manualDraft?.kind === 'freeKick' ? manualDraft.ball : game?.players.find(player => player.id === manualDraft?.owner);
 }
 function manualPowerMeterBox() {
-  if (!manualDraft?.aim || manualDraft.action === 'dribble') return null;
+  if (!manualDraft?.aim || manualDraft.action === 'dribble' || useLargePowerMeter()) return null;
   const owner = manualKickSource(); if (!owner) return null;
   return { x: owner.x > 99 ? owner.x - 5 : owner.x + 3.2, y: Math.max(1, Math.min(57, owner.y - 5)), width: 1.8, height: 10 };
 }
@@ -493,10 +524,21 @@ $('debug-next').addEventListener('click', () => start());
 $('manual-clear').addEventListener('click', clearManualDraft);
 $('manual-apply').addEventListener('click', () => { void ensureStadiumSound(); void applyManualDraft(); });
 $('stadium-sound').addEventListener('click', toggleStadiumSound);
+$('pitch-fullscreen').addEventListener('click', () => { void togglePitchFullscreen(); });
+document.addEventListener('fullscreenchange', () => { setPitchExpanded(document.fullscreenElement === $('pitch-view')); });
 $('goal-close').addEventListener('click', () => { $('goal-overlay').hidden = true; goalUntil = 0; });
 $('exit-close').addEventListener('click', () => { $('exit-overlay').hidden = true; exitUntil = 0; });
 $('final-close').addEventListener('click', () => { $('final-overlay').hidden = true; });
-$('manual-power-meter').addEventListener('click', selectManualPower);
+$('manual-power-meter').addEventListener('pointerdown', event => {
+  powerPointerHandled = event.pointerType === 'touch' || event.pointerType === 'pen';
+  if (powerPointerHandled) selectManualPower(event);
+});
+$('manual-power-meter').addEventListener('click', event => {
+  // A touch following a canvas drag may have no synthesized click. Select on
+  // contact, and ignore its optional click so the power is not unlocked again.
+  const handled = powerPointerHandled; powerPointerHandled = false;
+  if (!handled || event?.detail === 0) selectManualPower(event);
+});
 $('free-kick-ball').addEventListener('click', () => { if (manualDraft?.kind === 'freeKick') { manualDraft.setupTool = 'ball'; updateManualPanel('Topu yerleştirmek istediğin noktaya tıkla.'); } });
 $('free-kick-wall-count').addEventListener('input', () => {
   const count = Number($('free-kick-wall-count').value || 4); $('free-kick-wall-count-value').textContent = String(count);
@@ -521,6 +563,7 @@ for (const [id, mode] of Object.entries(initialModes)) $(id).addEventListener('c
   updateFreeModeControls(); updateModeLayout(mode); void loadMatch();
 });
 document.addEventListener('keydown', event => {
+  if (event.code === 'Escape' && pitchExpanded) { event.preventDefault(); void togglePitchFullscreen(); return; }
   const editing = ['INPUT', 'SELECT', 'TEXTAREA'].includes(event.target?.tagName) || event.target?.isContentEditable;
   if (editing) return;
   if (DRIVE_KEYS[event.code] && ['manual', 'free', 'online'].includes(matchMode)) {
@@ -715,6 +758,7 @@ function updateStats() {
   }
   $('offsides').textContent = (game.offsides ?? [0, 0]).join(' / ');
   $('clock').textContent = clock(playback.time); $('home-score').textContent = game.score[0]; $('away-score').textContent = game.score[1];
+  $('pitch-score').textContent = `Lime ${game.score[0]} – ${game.score[1]} Coral · ${clock(playback.time)}`;
   $('decisions').textContent = number(game.decisionCount); $('segments').textContent = game.deadBallVersion;
   for (const [id, values] of [['passes', game.passes], ['shots', game.shots], ['long-shots', game.longShots], ['saves', game.saves], ['tackles', game.tackles], ['fouls', game.fouls], ['yellow-cards', game.yellowCards], ['red-cards', game.redCards], ['injuries', game.injuries ?? [0, 0]]]) $(id).textContent = `${values[0]} / ${values[1]}`;
   $('home-phase').textContent = phases[game.phases[0]]; $('away-phase').textContent = phases[game.phases[1]];

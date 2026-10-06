@@ -7,13 +7,15 @@ import { Simulation } from '../backend/simulation.js';
 import { speedSettings } from '../backend/speeds.js';
 const settle = () => new Promise(resolve => setImmediate(resolve));
 
-async function client(t, { audio = false, audioThrows = false, webAudio = false } = {}) {
+async function client(t, { audio = false, audioThrows = false, webAudio = false, touch = false, fullscreen = 'unsupported' } = {}) {
   const html = await readFile(new URL('../public/index.html', import.meta.url), 'utf8');
   const ids = new Set([...html.matchAll(/id="([^"]+)"/g)].map(m => m[1])), nodes = new Map(), sources = [], documentListeners = {};
   function node(id) {
     if (id && !ids.has(id)) throw Error(`Missing element ${id}`); if (nodes.has(id)) return nodes.get(id);
-    const n = { value: '', textContent: '', checked: true, disabled: false, hidden: false, children: [], listeners: {}, style: {},
-      classList: { toggle() {} }, addEventListener(name, fn) { this.listeners[name] = fn; },
+    const classes = new Set();
+    const n = { value: '', textContent: '', checked: true, disabled: false, hidden: false, children: [], listeners: {}, style: {}, attributes: {},
+      classList: { toggle(name, enabled) { if (enabled) classes.add(name); else classes.delete(name); }, remove(name) { classes.delete(name); }, contains: name => classes.has(name) },
+      setAttribute(name, value) { this.attributes[name] = value; }, addEventListener(name, fn) { this.listeners[name] = fn; },
       replaceChildren(...children) { this.children = children; }, append(child) { this.children.push(child); }, prepend(child) { this.children.unshift(child); },
       getBoundingClientRect() { return { left: 0, top: 0, width: 1170, height: 800 }; }, setPointerCapture() {},
       get lastElementChild() { const self = this; return { remove() { self.children.pop(); } }; },
@@ -33,9 +35,10 @@ async function client(t, { audio = false, audioThrows = false, webAudio = false 
     close() { return Promise.resolve(); }
   }
   const context = { Playback, readMatch, AbortController, createPitch: () => () => {}, performance: { now: () => now }, requestAnimationFrame() {},
+    matchMedia: () => ({ matches: touch }),
     Audio: audio ? FakeAudio : undefined,
     AudioContext: webAudio ? FakeAudioContext : undefined, setTimeout(fn) { fn(); return 0; },
-    document: { body: { classList: { remove() {} } }, getElementById: node, createElement: () => node(), createTextNode: text => ({ textContent: text }), addEventListener(name, fn) { documentListeners[name] = fn; } },
+    document: { body: node(), getElementById: node, createElement: () => node(), createTextNode: text => ({ textContent: text }), addEventListener(name, fn) { documentListeners[name] = fn; } },
     fetch: async (url, options) => {
       assert.equal(options.method, 'POST'); const request = JSON.parse(options.body);
       if (url === '/api/match/control') {
@@ -59,10 +62,15 @@ async function client(t, { audio = false, audioThrows = false, webAudio = false 
       return new Response(body);
     },
   };
+  if (fullscreen !== 'unsupported') node('pitch-view').requestFullscreen = async () => {
+    if (fullscreen === 'rejected') throw new Error('Fullscreen unavailable');
+    context.document.fullscreenElement = node('pitch-view'); documentListeners.fullscreenchange?.();
+  };
+  context.document.exitFullscreen = async () => { context.document.fullscreenElement = null; documentListeners.fullscreenchange?.(); };
   const source = (await readFile(new URL('../public/app.js', import.meta.url), 'utf8')).replace(/^import .*;\r?\n/gm, '');
   const api = await vm.runInNewContext(`(async () => { ${source}\nreturn { state: () => ({ game, running, failed, playback }), frame, showEvents: () => logEvents(), dispose: () => controller?.abort() }; })()`, context);
   t.after(() => api.dispose()); await settle();
-  return { api, node, sources, audioInstances, whistleStarts, tick(dt = .05) { now += dt * 1000; api.frame(now); }, key(name, event) { documentListeners[name]?.(event); } };
+  return { api, node, sources, audioInstances, whistleStarts, document: context.document, tick(dt = .05) { now += dt * 1000; api.frame(now); }, key(name, event) { documentListeners[name]?.(event); } };
 }
 test('UI starts without credentials; a single stream supplies all player decisions', async t => {
   const c = await client(t); assert.equal(c.node('start').disabled, false); assert.equal(c.api.state().game.players.length, 22);
@@ -352,4 +360,53 @@ test('Free kick power can be reselected and moving the ball requires a new aim a
   assert.equal(c.node('manual-apply').disabled, true);
   c.tick(.45); down({ x: 86.1, y: 40 }); assert.equal(c.node('manual-apply').disabled, false);
   c.node('manual-clear').listeners.click(); assert.equal(c.node('manual-apply').disabled, true);
+});
+
+test('pitch fullscreen enters and exits without resetting the current match', async t => {
+  for (const fullscreen of ['supported', 'unsupported', 'rejected']) await t.test(fullscreen, async t => {
+    const c = await client(t, { fullscreen }), game = c.api.state().game, requests = c.sources.length;
+    c.node('pitch-fullscreen').listeners.click(); await settle();
+    assert.equal(c.node('pitch-view').classList.contains('pitch-expanded'), true);
+    assert.equal(c.document.body.classList.contains('pitch-is-expanded'), true);
+    assert.equal(c.node('pitch-fullscreen').attributes['aria-pressed'], 'true');
+    assert.equal(c.node('start').disabled, false);
+    if (fullscreen === 'supported') {
+      assert.equal(c.document.fullscreenElement, c.node('pitch-view'));
+      await c.document.exitFullscreen(); // Browser/OS exit must also restore the page.
+    } else c.key('keydown', { code: 'Escape', preventDefault() {} });
+    await settle();
+    assert.equal(c.node('pitch-view').classList.contains('pitch-expanded'), false);
+    assert.equal(c.document.body.classList.contains('pitch-is-expanded'), false);
+    assert.equal(c.node('pitch-fullscreen').attributes['aria-pressed'], 'false');
+    assert.equal(c.api.state().game, game); assert.equal(c.sources.length, requests);
+    c.node('pitch-fullscreen').listeners.click(); await settle();
+    c.node('pitch-fullscreen').listeners.click(); await settle();
+    assert.equal(c.node('pitch-view').classList.contains('pitch-expanded'), false);
+  });
+});
+
+test('touch devices select and reselect shot power using the large button in manual and free kick modes', async t => {
+  for (const freeKick of [false, true]) await t.test(freeKick ? 'freeKick' : 'manual', async t => {
+    const c = await client(t, { touch: true }); c.node(freeKick ? 'choose-free-kick' : 'choose-manual').listeners.click(); await settle();
+    const source = c.sources.at(-1), game = c.api.state().game, owner = game.players[game.owner - 1];
+    const eventAt = p => ({ clientX: 60 + p.x * 10, clientY: 60 + p.y * 10, pointerId: 1, preventDefault() {} });
+    const ball = freeKick ? { x: 76, y: 28 } : owner;
+    assert.equal(c.node('manual-timing-control').hidden, true);
+    if (freeKick) c.node('pitch').listeners.pointerdown(eventAt(ball));
+    c.node('pitch').listeners.pointerdown(eventAt(ball)); c.node('pitch').listeners.pointerup(eventAt({ x: 107, y: 34 }));
+    assert.equal(c.node('manual-timing-control').hidden, false); assert.equal(c.node('manual-apply').disabled, true);
+    c.tick(.45); c.node('manual-power-meter').listeners.pointerdown({ pointerType: 'touch', button: 0, preventDefault() {} });
+    c.node('manual-power-meter').listeners.click({ detail: 1 });
+    assert.equal(c.node('manual-apply').disabled, false); assert.equal(c.node('manual-timed-power-value').textContent, '%65');
+    c.tick(.2); assert.equal(c.node('manual-timed-power-value').textContent, '%65');
+    c.node('manual-power-meter').listeners.pointerdown({ pointerType: 'touch', button: 0, preventDefault() {} }); assert.equal(c.node('manual-apply').disabled, true);
+    c.tick(.18); c.node('manual-power-meter').listeners.pointerdown({ pointerType: 'touch', button: 0, preventDefault() {} });
+    assert.equal(c.node('manual-timed-power-value').textContent, '%44');
+    c.node('pitch-fullscreen').listeners.click(); await settle();
+    assert.equal(c.node('manual-timing-control').hidden, false); assert.equal(c.node('manual-apply').disabled, false);
+    c.node('manual-apply').listeners.click(); await settle(); await settle();
+    const plan = source.controls.find(item => item.action === (freeKick ? 'freeKickPlan' : 'manualPlan')).plan;
+    assert.ok(Math.abs(plan.power - .44) < 1e-9);
+    assert.equal(c.node('manual-timing-control').hidden, true);
+  });
 });

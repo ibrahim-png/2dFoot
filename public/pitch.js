@@ -15,6 +15,19 @@ const freeKickLayout = (ball, wallCount) => {
   return { wall, positions, keeper: { x: 103.2, y: Math.max(30.8, Math.min(37.2, keeperY)) } };
 };
 
+// Shared by drawing and pointer input so zooming never shifts a shot's target.
+export function pitchCamera(width, height, halfPitch = false) {
+  const scale = halfPitch ? Math.min(width / 76, height / 60) : Math.min(width / 117, height / 80);
+  const centerX = halfPitch ? 80.5 : 52.5;
+  return {
+    scale, centerX, rotation: halfPitch ? -Math.PI / 2 : 0,
+    toField(x, y) {
+      const dx = (x - width / 2) / scale, dy = (y - height / 2) / scale;
+      return halfPitch ? { x: centerX - dy, y: 34 + dx } : { x: centerX + dx, y: 34 + dy };
+    },
+  };
+}
+
 export function createPitch(canvas) {
   const ctx = canvas.getContext('2d'); let width = 1, height = 1;
   const resize = () => {
@@ -24,9 +37,14 @@ export function createPitch(canvas) {
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   };
   new ResizeObserver(resize).observe(canvas); resize();
-  return (game, showPaths = true, manualDraft = null) => {
-    const s = Math.min(width / 117, height / 80);
-    ctx.clearRect(0, 0, width, height); ctx.save(); ctx.translate((width - 105 * s) / 2, (height - 68 * s) / 2); ctx.scale(s, s);
+  return (game, showPaths = true, manualDraft = null, halfPitch = false) => {
+    const camera = pitchCamera(width, height, halfPitch), s = camera.scale;
+    ctx.clearRect(0, 0, width, height); ctx.save();
+    ctx.translate(width / 2, height / 2); ctx.rotate(camera.rotation); ctx.scale(s, s); ctx.translate(-camera.centerX, -34);
+    if (halfPitch) { ctx.beginPath(); ctx.rect(52.5, -4, 58, 76); ctx.clip(); }
+    const label = (text, x, y) => {
+      ctx.save(); ctx.translate(x, y); ctx.rotate(-camera.rotation); ctx.fillText(text, 0, 0); ctx.restore();
+    };
     const line = (x1, y1, x2, y2) => { ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke(); };
     const circle = (x, y, r, fill = false) => { ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); fill ? ctx.fill() : ctx.stroke(); };
     const arrow = (from, to, color, dashed = false) => {
@@ -81,7 +99,7 @@ export function createPitch(canvas) {
         const kicker = { x: manualDraft.ball.x - dx / length * 2.45, y: manualDraft.ball.y - dy / length * 2.45 };
         const owner = game.players.find(p => p.id === manualDraft.owner);
         ctx.save(); ctx.fillStyle = '#c5f36b'; ctx.strokeStyle = '#e7ffad'; ctx.lineWidth = .18; circle(kicker.x, kicker.y, 1.45, true); circle(kicker.x, kicker.y, 1.45);
-        ctx.fillStyle = '#193020'; ctx.font = 'bold 1.4px "Segoe UI", sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(owner?.number ?? '', kicker.x, kicker.y + .04); ctx.restore();
+        ctx.fillStyle = '#193020'; ctx.font = 'bold 1.4px "Segoe UI", sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; label(owner?.number ?? '', kicker.x, kicker.y + .04); ctx.restore();
       }
       if (manualDraft.kind === 'freeKick' && manualDraft.ball) {
         ctx.save(); ctx.strokeStyle = '#ffe28a70'; ctx.lineWidth = .18; ctx.setLineDash([.5, .45]); line(manualDraft.ball.x, manualDraft.ball.y, freeKick.wall.x, freeKick.wall.y); ctx.restore();
@@ -92,7 +110,7 @@ export function createPitch(canvas) {
       if (manualDraft.kind === 'freeKick') {
         const keeper = freeKick.keeper, keeperPlayer = game.players.find(p => p.team === 1 && p.keeper);
         ctx.save(); ctx.fillStyle = '#bbabfa'; ctx.strokeStyle = '#ffd3bd'; ctx.lineWidth = .18; circle(keeper.x, keeper.y, 1.45, true); circle(keeper.x, keeper.y, 1.45);
-        ctx.fillStyle = '#193020'; ctx.font = 'bold 1.4px "Segoe UI", sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(keeperPlayer?.number ?? '1', keeper.x, keeper.y + .04); ctx.restore();
+        ctx.fillStyle = '#193020'; ctx.font = 'bold 1.4px "Segoe UI", sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; label(keeperPlayer?.number ?? '1', keeper.x, keeper.y + .04); ctx.restore();
       }
       for (const run of manualDraft.runs ?? []) {
         const source = game.players.find(p => p.id === run.id); if (source) arrow(source, run, '#79cff2', true);
@@ -104,7 +122,7 @@ export function createPitch(canvas) {
         else curvedArrow(kickSource, manualDraft.aim, manualDraft.action === 'shoot' ? '#ff9d77' : '#fff0a8', manualDraft.curve);
         if (manualDraft.kind === 'freeKick') {
           ctx.save(); ctx.fillStyle = '#fff4b7'; ctx.font = 'bold 1.15px "Segoe UI", sans-serif'; ctx.textAlign = 'center';
-          ctx.fillText('yükseklik otomatik', (kickSource.x + manualDraft.aim.x) / 2, (kickSource.y + manualDraft.aim.y) / 2 - 1.2); ctx.restore();
+          label('yükseklik otomatik', (kickSource.x + manualDraft.aim.x) / 2, (kickSource.y + manualDraft.aim.y) / 2 - 1.2); ctx.restore();
         }
       }
       if (manualDraft.powerMeter) {
@@ -145,7 +163,7 @@ export function createPitch(canvas) {
       ctx.fillStyle = '#081a1880'; circle(p.x + .18, p.y + .4, 1.5, true);
       ctx.fillStyle = p.keeper ? p.team ? '#bbabfa' : '#79cff2' : color; circle(p.x, p.y, 1.45, true);
       ctx.strokeStyle = p.team ? '#ffd3bd' : '#e7ffad'; ctx.lineWidth = .15; circle(p.x, p.y, 1.45);
-      ctx.fillStyle = '#193020'; ctx.font = 'bold 1.4px "Segoe UI", sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(p.number, p.x, p.y + .04);
+      ctx.fillStyle = '#193020'; ctx.font = 'bold 1.4px "Segoe UI", sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; label(p.number, p.x, p.y + .04);
       ctx.globalAlpha = 1;
       if (p.card === 'yellow' || showingRed) {
         ctx.save(); ctx.translate(p.x, p.y - 3.25); ctx.rotate(-.1);
@@ -163,7 +181,7 @@ export function createPitch(canvas) {
       const by = groundY - Math.min(5.6, z * .7), radius = .64 + Math.min(1.05, z * .18);
       ctx.fillStyle = '#081a1880'; circle(bx + .15, groundY + .25, .69, true);
       ctx.fillStyle = '#fff'; circle(bx, by, radius, true); ctx.fillStyle = '#45504b'; circle(bx, by, .22, true);
-      if (z > .15) { ctx.fillStyle = '#fff4b7'; ctx.font = 'bold 1.05px "Segoe UI", sans-serif'; ctx.textAlign = 'center'; ctx.fillText(`${z.toFixed(1)} m`, bx, by - 1.25); }
+      if (z > .15) { ctx.fillStyle = '#fff4b7'; ctx.font = 'bold 1.05px "Segoe UI", sans-serif'; ctx.textAlign = 'center'; label(`${z.toFixed(1)} m`, bx, by - 1.25); }
     }
     ctx.restore();
   };

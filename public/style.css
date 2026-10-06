@@ -51,6 +51,7 @@ body.choosing-mode{overflow:hidden}
 
 /* Scroll wide tables within their panels instead of widening the mobile viewport. */
 .pitch-view,.pitch-screen{min-width:0}
+.pitch-half:not(.pitch-expanded) #pitch{aspect-ratio:76/60}
 .fullscreen-toggle{min-height:40px;padding:0 12px;border:1px solid #688450;background:#25351e;color:#d8f6b4;font-size:11px;touch-action:manipulation}
 .pitch-tools{flex-wrap:wrap;gap:10px}
 .pitch-score{display:none}
@@ -73,6 +74,11 @@ body.pitch-is-expanded{overflow:hidden}
 .pitch-expanded .pitch-footer{justify-content:flex-end}
 .pitch-expanded .controls{flex:none;margin:8px 0 0;gap:8px}
 .pitch-expanded .controls button{min-height:40px}
+/* Free kicks use the on-pitch play button; give their fullscreen canvas the spare rows. */
+.pitch-half.pitch-expanded:not(.pitch-rotated) .pitch-screen{position:relative}
+.pitch-half.pitch-expanded .pitch-header,.pitch-half.pitch-expanded #start,.pitch-half.pitch-expanded #step{display:none}
+.pitch-half.pitch-expanded .controls{position:absolute;left:22px;bottom:18px;margin:0}
+.pitch-half.pitch-expanded .pitch-footer{padding-left:120px}
 .pitch-power-control{position:absolute;top:12px;left:12px;z-index:3;display:grid;justify-items:center;gap:6px;padding:8px;border:1px solid #82986b;border-radius:12px;background:#0c1915f2;box-shadow:0 4px 18px #0005;touch-action:manipulation}
 .pitch-power-control[hidden]{display:none}
 .pitch-power-control.power-on-right{left:auto;right:12px}

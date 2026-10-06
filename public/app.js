@@ -1,5 +1,5 @@
 import { Playback, readMatch } from './playback.js';
-import { createPitch } from './pitch.js';
+import { createPitch, pitchCamera } from './pitch.js';
 
 const $ = id => document.getElementById(id), render = createPitch($('pitch'));
 const TEAM_NAMES = ['Lime FC', 'Coral United'], DURATION = 300;
@@ -124,6 +124,7 @@ function setPitchExpanded(expanded) {
 function updatePitchOrientation() {
   pitchRotated = pitchExpanded && useLargePowerMeter() && globalThis.innerHeight > globalThis.innerWidth;
   $('pitch-view').classList.toggle('pitch-rotated', pitchRotated);
+  $('pitch-view').classList.toggle('pitch-half', useHalfPitch());
 }
 async function lockPitchLandscape() {
   if (!pitchExpanded || !useLargePowerMeter() || !globalThis.screen?.orientation?.lock) return;
@@ -180,6 +181,7 @@ function updateFreeModeControls() {
   $('free-home-count-value').textContent = $('free-home-count').value; $('free-away-count-value').textContent = $('free-away-count').value;
 }
 function updateModeLayout(mode = matchMode) {
+  $('pitch-view').classList.toggle('pitch-half', mode === 'freeKick' && useLargePowerMeter());
   const online = mode === 'online';
   for (const id of ['decision-stat', 'segment-stat', 'speed-panel', 'decision-panel', 'log-panel', 'local-engine-panel']) $(id).hidden = online;
   $('top-stats').classList.toggle('online-summary', online);
@@ -355,9 +357,10 @@ function pitchPoint(event) {
   const width = pitchRotated ? rect.height : rect.width, height = pitchRotated ? rect.width : rect.height;
   const x = pitchRotated ? event.clientY - rect.top : event.clientX - rect.left;
   const y = pitchRotated ? rect.left + rect.width - event.clientX : event.clientY - rect.top;
-  const scale = Math.min(width / 117, height / 80), offsetX = (width - 105 * scale) / 2, offsetY = (height - 68 * scale) / 2;
-  return { x: Math.max(-2.4, Math.min(107.4, (x - offsetX) / scale)), y: Math.max(0, Math.min(68, (y - offsetY) / scale)) };
+  const point = pitchCamera(width, height, useHalfPitch()).toField(x, y);
+  return { x: Math.max(useHalfPitch() ? 52.5 : -2.4, Math.min(107.4, point.x)), y: Math.max(0, Math.min(68, point.y)) };
 }
+function useHalfPitch() { return matchMode === 'freeKick' && useLargePowerMeter(); }
 function manualKickSource() {
   return manualDraft?.kind === 'freeKick' ? manualDraft.ball : game?.players.find(player => player.id === manualDraft?.owner);
 }
@@ -886,7 +889,7 @@ function frame(now) {
     else if (stepUntil !== null && playback.time >= stepUntil - .000001) pause('10 SANİYELİK OYUN TAMAMLANDI');
     else status(playback.buffered < .05 && !playback.complete ? 'GÖRÜNTÜ BEKLENİYOR' : 'MAÇ CANLI', true);
   }
-  if (game) render(game, $('show-paths').checked, manualRenderDraft());
+  if (game) render(game, $('show-paths').checked, manualRenderDraft(), useHalfPitch());
   updateMatchAudio();
   if (goalUntil && now >= goalUntil) { $('goal-overlay').hidden = true; goalUntil = 0; }
   if (exitUntil && now >= exitUntil) { $('exit-overlay').hidden = true; exitUntil = 0; }

@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import vm from 'node:vm';
 import { readFile } from 'node:fs/promises';
 import { Playback, readMatch } from '../public/playback.js';
+import { pitchCamera } from '../public/pitch.js';
 import { Simulation } from '../backend/simulation.js';
 import { speedSettings } from '../backend/speeds.js';
 const settle = () => new Promise(resolve => setImmediate(resolve));
@@ -21,7 +22,7 @@ async function client(t, { audio = false, audioThrows = false, webAudio = false,
       get lastElementChild() { const self = this; return { remove() { self.children.pop(); } }; },
     }; if (id) nodes.set(id, n); return n;
   }
-  let now = 0; const audioInstances = [];
+  let now = 0; const audioInstances = [], renders = [];
   class FakeAudio {
     constructor(src) { this.src = src; this.currentTime = 0; this.readyState = 4; this.volume = 1; this.loop = false; this.paused = true; this.playCount = 0; audioInstances.push(this); }
     play() { this.paused = false; this.playCount++; if (audioThrows) throw new Error('media unavailable'); return Promise.resolve(); }
@@ -34,7 +35,7 @@ async function client(t, { audio = false, audioThrows = false, webAudio = false,
     createGain() { return { gain: { setValueAtTime() {}, exponentialRampToValueAtTime() {} }, connect() {} }; }
     close() { return Promise.resolve(); }
   }
-  const context = { Playback, readMatch, AbortController, createPitch: () => () => {}, performance: { now: () => now }, requestAnimationFrame() {},
+  const context = { pitchCamera, Playback, readMatch, AbortController, createPitch: () => (...args) => renders.push(args), performance: { now: () => now }, requestAnimationFrame() {},
     matchMedia: () => ({ matches: touch }),
     innerWidth: viewport.width, innerHeight: viewport.height, addEventListener(name, fn) { windowListeners[name] = fn; },
     screen: { orientation: orientationLock === 'unsupported' ? {} : {
@@ -75,7 +76,7 @@ async function client(t, { audio = false, audioThrows = false, webAudio = false,
   const source = (await readFile(new URL('../public/app.js', import.meta.url), 'utf8')).replace(/^import .*;\r?\n/gm, '');
   const api = await vm.runInNewContext(`(async () => { ${source}\nreturn { state: () => ({ game, running, failed, playback }), frame, showEvents: () => logEvents(), dispose: () => controller?.abort() }; })()`, context);
   t.after(() => api.dispose()); await settle();
-  return { api, node, sources, audioInstances, whistleStarts, document: context.document, orientationCalls,
+  return { api, node, sources, audioInstances, whistleStarts, renders, document: context.document, orientationCalls,
     resize(width, height) { context.innerWidth = width; context.innerHeight = height; windowListeners.resize?.(); },
     tick(dt = .05) { now += dt * 1000; api.frame(now); }, key(name, event) { documentListeners[name]?.(event); } };
 }
@@ -396,7 +397,7 @@ test('touch devices select and reselect shot power using the large button in man
   for (const freeKick of [false, true]) await t.test(freeKick ? 'freeKick' : 'manual', async t => {
     const c = await client(t, { touch: true }); c.node(freeKick ? 'choose-free-kick' : 'choose-manual').listeners.click(); await settle();
     const source = c.sources.at(-1), game = c.api.state().game, owner = game.players[game.owner - 1];
-    const eventAt = p => ({ clientX: 60 + p.x * 10, clientY: 60 + p.y * 10, pointerId: 1, preventDefault() {} });
+    const eventAt = p => ({ clientX: freeKick ? 585 + (p.y - 34) * (800 / 60) : 60 + p.x * 10, clientY: freeKick ? 400 - (p.x - 80.5) * (800 / 60) : 60 + p.y * 10, pointerId: 1, preventDefault() {} });
     const ball = freeKick ? { x: 76, y: 28 } : owner;
     assert.equal(c.node('manual-timing-control').hidden, true);
     if (freeKick) c.node('pitch').listeners.pointerdown(eventAt(ball));
@@ -418,16 +419,29 @@ test('touch devices select and reselect shot power using the large button in man
   });
 });
 
+test('half-pitch framing follows mobile free kick mode and restores the full field in other modes', async t => {
+  const c = await client(t);
+  c.node('choose-free-kick').listeners.click(); await settle(); c.tick();
+  assert.equal(c.node('pitch-view').classList.contains('pitch-half'), false); assert.equal(c.renders.at(-1)[3], false);
+  c.resize(390, 844); c.tick();
+  assert.equal(c.node('pitch-view').classList.contains('pitch-half'), true); assert.equal(c.renders.at(-1)[3], true);
+  c.resize(1440, 900); c.tick();
+  assert.equal(c.node('pitch-view').classList.contains('pitch-half'), false); assert.equal(c.renders.at(-1)[3], false);
+  c.resize(390, 844); c.node('match-mode').value = 'manual'; c.node('match-mode').listeners.change(); await settle(); c.tick();
+  assert.equal(c.node('pitch-view').classList.contains('pitch-half'), false); assert.equal(c.renders.at(-1)[3], false);
+});
+
 test('mobile fullscreen uses landscape orientation and preserves shot coordinates in the rotated fallback', async t => {
   for (const orientationLock of ['supported', 'rejected', 'unsupported']) await t.test(orientationLock, async t => {
     const c = await client(t, { touch: true, fullscreen: 'supported', orientationLock, viewport: { width: 320, height: 568 } });
     c.node('choose-free-kick').listeners.click(); await settle();
+    assert.equal(c.node('pitch-view').classList.contains('pitch-half'), true);
     c.node('pitch-fullscreen').listeners.click(); await settle();
     assert.equal(c.node('pitch-view').classList.contains('pitch-rotated'), true);
     assert.deepEqual(c.orientationCalls, orientationLock === 'unsupported' ? [] : ['landscape']);
     // The canvas is 600 by 300 before its 90-degree CSS rotation.
     c.node('pitch').getBoundingClientRect = () => ({ left: 20, top: 30, width: 300, height: 600 });
-    const eventAt = (x, y) => ({ clientX: 320 - (22.5 + y * 3.75), clientY: 30 + 103.125 + x * 3.75, button: 0, pointerId: 1, preventDefault() {} });
+    const eventAt = (x, y) => ({ clientX: 320 - (150 - (x - 80.5) * 5), clientY: 330 + (y - 34) * 5, button: 0, pointerId: 1, preventDefault() {} });
     c.node('pitch').listeners.pointerdown(eventAt(76, 28));
     c.node('pitch').listeners.pointerdown(eventAt(76, 28)); c.node('pitch').listeners.pointerup(eventAt(107, 34));
     const length = Math.hypot(31, 6), bow = Math.min(9, length * .22) * .5;
@@ -441,6 +455,7 @@ test('mobile fullscreen uses landscape orientation and preserves shot coordinate
     const plan = c.sources.at(-1).controls.find(item => item.action === 'freeKickPlan').plan;
     assert.deepEqual(plan.ball, { x: 76, y: 28 }); assert.deepEqual(plan.aim, { x: 107, y: 34 });
     assert.ok(Math.abs(plan.curve - .5) < 1e-9); assert.ok(Math.abs(plan.power - .65) < 1e-9);
+    c.tick(.1); assert.equal(c.renders.at(-1)[3], true, 'keep the half-pitch camera after the shot starts');
     await c.document.exitFullscreen();
     assert.equal(c.node('pitch-view').classList.contains('pitch-rotated'), false);
     assert.deepEqual(c.orientationCalls, orientationLock === 'supported' ? ['landscape', 'unlock'] : orientationLock === 'rejected' ? ['landscape'] : []);

@@ -181,6 +181,45 @@ test('free kick height is selected automatically to clear a wall in the shot lan
   assert.ok(lift > 0 && lift < 1); assert.equal(crossed, true); assert.ok(heightAtWall > 1.9);
 });
 
+function unobstructedFreeKick(ball, aim, power = .6, shotPower = 30) {
+  const simulation = new Simulation(37, undefined, 'freeKick'), owner = simulation.readyFrame().manualControl.owner;
+  simulation.game.random = () => .5;
+  simulation.applyFreeKickPlan({ owner, ball, wallCount: 1, aim, power, curve: 0, shotPower, curvePower: 70 });
+  simulation.next(.025); assert.ok(simulation.game.flight);
+  // Isolate the flight/landing lifecycle from tackles and saves.
+  for (const player of simulation.game.players.filter(player => player.team === 1)) { player.x = 95; player.y = 60; }
+  simulation.game.freeKickFreezePlayers = true;
+  return simulation;
+}
+
+test('a free kick can bounce on the ground and score before returning to setup', () => {
+  const ball = { x: 80, y: 34 }, simulation = unobstructedFreeKick(ball, { x: 107, y: 34 });
+  for (let i = 0; i < 200 && simulation.game.flight; i++) simulation.next(.025);
+  assert.equal(simulation.awaitingManual, null); assert.equal(simulation.game.loose, true);
+  assert.ok(simulation.game.ball.x < 105); assert.equal(simulation.game.ball.z, 0);
+  assert.ok(simulation.game.looseVelocity.vx > 0);
+  simulation.next(.05); assert.ok(simulation.game.ball.z > 0); assert.equal(simulation.awaitingManual, null);
+  for (let i = 0; i < 200 && !simulation.awaitingManual; i++) simulation.next(.025);
+  assert.equal(simulation.game.score[0], 1); assert.ok(simulation.game.events.some(event => event.type === 'goal'));
+  assert.equal(simulation.awaitingManual, simulation.freeKickTraining.owner); assert.deepEqual(simulation.game.ball, ball);
+});
+
+test('a landed free kick waits until the loose ball stops or leaves the pitch', () => {
+  for (const exits of [false, true]) {
+    const ball = exits ? { x: 80, y: 20 } : { x: 50, y: 34 };
+    const simulation = unobstructedFreeKick(ball, exits ? { x: 107, y: 20 } : { x: 75, y: 34 }, exits ? .6 : .3, exits ? 30 : 20);
+    for (let i = 0; i < 200 && simulation.game.flight; i++) simulation.next(.025);
+    const landingX = simulation.game.ball.x, landingTime = simulation.game.elapsed;
+    assert.equal(simulation.awaitingManual, null); assert.ok(simulation.game.looseVelocity);
+    simulation.next(.2); assert.ok(simulation.game.ball.x > landingX); assert.equal(simulation.awaitingManual, null);
+    for (let i = 0; i < 400 && !simulation.awaitingManual; i++) simulation.next(.025);
+    assert.ok(simulation.awaitingManual); assert.equal(simulation.game.score[0], 0);
+    assert.ok(simulation.game.elapsed > landingTime + .2);
+    assert.equal(simulation.game.events.some(event => event.type === 'goalKick'), exits);
+    assert.deepEqual(simulation.game.ball, ball);
+  }
+});
+
 test('a keeper save remains visible before free kick practice resets', () => {
   const simulation = new Simulation(32, undefined, 'freeKick'), owner = simulation.readyFrame().manualControl.owner, ball = { x: 79, y: 28 };
   const keeper = freeKickLayout(ball, 4).keeper; simulation.game.players[owner - 1].traits.shotAccuracy = 1; simulation.game.random = () => .3;

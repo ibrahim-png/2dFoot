@@ -120,7 +120,7 @@ function controls() {
   $('debug-next').disabled = !playback.debugPause || failed;
   $('decision-pause').disabled = !game || failed || !running;
   $('decision-next').disabled = !game || failed || running || game.ended || !selectedPlayer('decision-player')?.active;
-  const manualReady = manualDraft?.kind === 'freeKick' ? manualDraft.ball && manualDraft.wall && manualDraft.aim :
+  const manualReady = manualDraft?.kind === 'freeKick' ? manualDraft.ball && manualDraft.wall && manualDraft.aim && manualDraft.powerLocked :
     manualDraft?.aim && (manualDraft.action === 'dribble' || manualDraft.powerLocked);
   $('manual-apply').disabled = !manualReady || applyingManual;
   $('formation-hint').textContent = started ? 'Dizilişi değiştirmek için Yeni maç düğmesini kullan.' : 'İki takımın dizilişini ayrı seç. Yerleşim sahada güncellenir.';
@@ -216,11 +216,11 @@ function updateManualPanel(message = '') {
   $('manual-panel').hidden = !manualDraft; $('pitch-stage').classList.toggle('manual-drawing', !!manualDraft);
   $('manual-apply').hidden = !manualDraft;
   $('free-kick-controls').hidden = manualDraft?.kind !== 'freeKick';
-  $('manual-slider-controls').hidden = manualDraft?.kind !== 'freeKick';
   $('manual-timing-control').hidden = true;
   if (manualDraft?.kind === 'freeKick') {
     $('manual-title').textContent = 'Free kick · Lime FC';
-    $('manual-status').textContent = message || `${shirt(owner?.id)} kullanacak · ${manualDraft.ball ? 'top hazır' : 'top yeri bekleniyor'} · ${manualDraft.wallCount} kişilik otomatik baraj · şut gücü ${manualDraft.shotPower}/40 · falso gücü %${manualDraft.curvePower} · yükseklik otomatik · ${manualDraft.aim ? 'şut hedefi hazır' : 'şut hedefi bekleniyor'}`;
+    const powerState = manualDraft.powerLocked ? `güç %${Math.round(manualDraft.power * 100)}` : 'güç seçimi bekleniyor';
+    $('manual-status').textContent = message || `${shirt(owner?.id)} kullanacak · ${manualDraft.ball ? 'top hazır' : 'top yeri bekleniyor'} · ${manualDraft.wallCount} kişilik otomatik baraj · yükseklik otomatik · ${manualDraft.aim ? `şut hedefi hazır · ${powerState}` : 'şut hedefi bekleniyor'}`;
     $('free-kick-ball').classList.toggle('active', manualDraft.setupTool === 'ball');
   } else if (manualDraft) {
     const teamName = TEAM_NAMES[manualDraft.team ?? 0];
@@ -243,16 +243,13 @@ function openManualControl(frame = playback.manualPause) {
     manualKeys.clear();
     if (freeKick) {
       $('free-kick-wall-count').value = String(setup?.wallCount ?? Number($('free-kick-wall-count').value || 4));
-      $('free-kick-shot-power').value = String(setup?.shotPower ?? owner?.traits?.shotPower ?? 30);
-      $('free-kick-curve-power').value = String(setup?.curvePower ?? owner?.traits?.curvePower ?? 70);
     }
     const ball = setup?.ball ? { ...setup.ball } : null;
     manualDraft = { checkpoint: frame.manualControl.id, kind: freeKick ? 'freeKick' : 'manual', team: frame.manualControl.team ?? 0, owner: frame.manualControl.owner, passTo: null,
       action: 'shoot', aim: null, ball, wall: ball ? automaticFreeKickWall(ball) : null,
       wallCount: Number($('free-kick-wall-count').value || 4), setupTool: freeKick ? ball ? 'aim' : 'ball' : null,
-      shotPower: Number($('free-kick-shot-power').value || owner?.traits?.shotPower || 30), curvePower: Number($('free-kick-curve-power').value || owner?.traits?.curvePower || 70),
-      power: freeKick ? Number($('manual-power').value || 100) / 100 : .3, curve: freeKick ? Number($('manual-curve').value || 0) / 100 : 0,
-      powerLocked: freeKick, meterStartedAt: performance.now(), runs: new Map(), preview: null };
+      shotPower: setup?.shotPower ?? owner?.traits?.shotPower ?? 30, curvePower: setup?.curvePower ?? owner?.traits?.curvePower ?? 70,
+      power: .3, curve: 0, powerLocked: false, meterStartedAt: performance.now(), runs: new Map(), preview: null };
   }
   manualStopRequested = false; status(matchMode === 'free' ? 'FREE MOD · HÜCUMU ÇİZ' : matchMode === 'online' ? `ONLINE · ${TEAM_NAMES[onlineTeam]} HÜCUMU ÇİZ` : 'SEN OYNA · HÜCUMU ÇİZ'); updateManualKickControls();
   if (matchMode === 'free' && frame.manualControl.repeat) updateManualPanel('Top kaybı veya oyun dışı sonrası başlangıç düzeni yeniden kuruldu. Yeni hücumu çiz.');
@@ -260,32 +257,24 @@ function openManualControl(frame = playback.manualPause) {
 function clearManualDraft() {
   if (!manualDraft) return;
   manualDraft.aim = null; manualDraft.passTo = null; manualDraft.runs.clear(); manualDraft.preview = null; manualDrag = null;
+  manualDraft.action = 'shoot'; manualDraft.curve = 0; manualDraft.power = .3; manualDraft.powerLocked = false; manualDraft.meterStartedAt = performance.now();
   if (manualDraft.kind === 'freeKick') {
     manualDraft.ball = null; manualDraft.wall = null; manualDraft.setupTool = 'ball';
     updateManualPanel('Serbest vuruş temizlendi. Topun yeni yerini sahaya tıkla.'); return;
   }
-  manualDraft.action = 'shoot'; manualDraft.curve = 0; manualDraft.power = .3; manualDraft.powerLocked = false; manualDraft.meterStartedAt = performance.now();
   updateManualPanel('Çizimler temizlendi. Pas için alıcıyı seçip topu göndereceğin noktayı çiz.');
 }
 function updateManualKickControls() {
   const action = manualDraft?.kind === 'freeKick' ? 'shoot' : manualDraft?.action === 'dribble' ? 'dribble' : manualDraft?.passTo ? 'pass' : 'shoot';
-  const power = Number($('manual-power').value || 100), curve = Number($('manual-curve').value || 0);
   $('manual-action-label').textContent = action === 'pass' ? 'Pas' : action === 'dribble' ? 'Top sürme · WASD' : 'Şut';
-  $('manual-power').disabled = action !== 'shoot';
-  $('manual-curve').disabled = action === 'dribble';
-  $('manual-power-value').textContent = `%${power}`;
-  $('manual-curve-value').textContent = curve === 0 ? 'Düz' : `${curve < 0 ? 'Sol' : 'Sağ'} %${Math.abs(curve)}`;
-  const shotPower = Number($('free-kick-shot-power').value || 30), curvePower = Number($('free-kick-curve-power').value || 70);
-  $('free-kick-shot-power-value').textContent = `${shotPower} / 40`; $('free-kick-curve-power-value').textContent = `%${curvePower}`;
   if (manualDraft) {
     manualDraft.action = action;
-    if (manualDraft.kind === 'freeKick') { manualDraft.power = power / 100; manualDraft.curve = curve / 100; manualDraft.shotPower = shotPower; manualDraft.curvePower = curvePower; }
     if (action === 'dribble') manualDraft.runs.delete(manualDraft.owner);
     updateManualPanel();
   }
 }
 function updateManualPowerMeter(now = performance.now()) {
-  if (!manualDraft || manualDraft.kind === 'freeKick' || manualDraft.action === 'dribble') return;
+  if (!manualDraft || manualDraft.action === 'dribble') return;
   if (!manualDraft.powerLocked) {
     const elapsed = Math.max(0, now - (manualDraft.meterStartedAt ?? now)), phase = elapsed % 1800 / 1800;
     const wave = phase < .5 ? phase * 2 : (1 - phase) * 2;
@@ -297,12 +286,13 @@ function updateManualPowerMeter(now = performance.now()) {
   $('manual-power-meter').classList.toggle('locked', !!manualDraft.powerLocked);
 }
 function selectManualPower(event) {
-  if (event?.button !== undefined && event.button !== 0 || !manualDraft || manualDraft.kind === 'freeKick' || manualDraft.action === 'dribble') return;
+  if (event?.button !== undefined && event.button !== 0 || !manualDraft || manualDraft.action === 'dribble') return;
   if (!manualDraft.aim) { updateManualPanel('Önce top sahibinden pas veya şut yönünü çiz.'); return; }
   if (manualDraft.powerLocked) {
     manualDraft.powerLocked = false; manualDraft.meterStartedAt = performance.now();
     updateManualPanel('Güç göstergesi yeniden hareket ediyor. İstediğin seviyede sol tıkla.');
   } else {
+    updateManualPowerMeter();
     manualDraft.power = manualMeterPower; manualDraft.powerLocked = true;
     updateManualPanel(`Vuruş gücü %${Math.round(manualDraft.power * 100)} olarak seçildi. Planı uygulayabilir veya tekrar seçebilirsin.`);
   }
@@ -313,9 +303,12 @@ function pitchPoint(event) {
   const offsetX = (rect.width - 105 * scale) / 2, offsetY = (rect.height - 68 * scale) / 2;
   return { x: Math.max(-2.4, Math.min(107.4, (event.clientX - rect.left - offsetX) / scale)), y: Math.max(0, Math.min(68, (event.clientY - rect.top - offsetY) / scale)) };
 }
+function manualKickSource() {
+  return manualDraft?.kind === 'freeKick' ? manualDraft.ball : game?.players.find(player => player.id === manualDraft?.owner);
+}
 function manualPowerMeterBox() {
-  if (!manualDraft?.aim || manualDraft.kind === 'freeKick' || manualDraft.action === 'dribble') return null;
-  const owner = game?.players.find(player => player.id === manualDraft.owner); if (!owner) return null;
+  if (!manualDraft?.aim || manualDraft.action === 'dribble') return null;
+  const owner = manualKickSource(); if (!owner) return null;
   return { x: owner.x > 99 ? owner.x - 5 : owner.x + 3.2, y: Math.max(1, Math.min(57, owner.y - 5)), width: 1.8, height: 10 };
 }
 const fieldPoint = point => ({
@@ -334,7 +327,7 @@ function closestControlledPlayer(point, exclude = null, radius = 3.4) {
 }
 function kickArrowDistance(point) {
   if (!manualDraft?.aim || manualDraft.action === 'dribble') return Infinity;
-  const source = manualDraft.kind === 'freeKick' ? manualDraft.ball : game?.players.find(player => player.id === manualDraft.owner);
+  const source = manualKickSource();
   if (!source) return Infinity;
   const dx = manualDraft.aim.x - source.x, dy = manualDraft.aim.y - source.y, length = Math.hypot(dx, dy) || 1;
   const bow = manualDraft.curve * Math.min(9, length * .22), control = { x: (source.x + manualDraft.aim.x) / 2 - dy / length * bow, y: (source.y + manualDraft.aim.y) / 2 + dx / length * bow };
@@ -353,13 +346,9 @@ function manualPointerDown(event) {
   if (manualDraft.kind === 'freeKick' && manualDraft.setupTool === 'ball') {
     const placed = fieldPoint(point);
     manualDraft.ball = placed; manualDraft.wall = automaticFreeKickWall(placed); manualDraft.setupTool = 'aim';
+    manualDraft.aim = null; manualDraft.curve = 0; manualDraft.power = .3; manualDraft.powerLocked = false; manualDraft.preview = null; manualDrag = null;
     updateManualPanel('Top yerleştirildi; baraj otomatik olarak 9,15 metreye kuruldu. Topun üzerinden şut yönünü çiz.');
     event.preventDefault?.(); return;
-  }
-  if (manualDraft.kind === 'freeKick') {
-    if (!manualDraft.ball || Math.hypot(manualDraft.ball.x - point.x, manualDraft.ball.y - point.y) > 4) { updateManualPanel('Şut çizgisini başlatmak için topun üzerine bas.'); return; }
-    manualDrag = { id: manualDraft.owner, kind: 'kick' }; manualDraft.preview = { id: manualDraft.owner, kind: 'kick', ...point };
-    $('pitch').setPointerCapture?.(event.pointerId); event.preventDefault?.(); return;
   }
   const powerMeter = manualPowerMeterBox();
   if (powerMeter && point.x >= powerMeter.x - .5 && point.x <= powerMeter.x + powerMeter.width + .5 && point.y >= powerMeter.y - .5 && point.y <= powerMeter.y + powerMeter.height + .5) {
@@ -368,6 +357,11 @@ function manualPointerDown(event) {
   if (manualDraft.aim && manualDraft.action !== 'dribble' && Math.hypot(manualDraft.aim.x - point.x, manualDraft.aim.y - point.y) <= 4.5) {
     manualDrag = { id: manualDraft.owner, kind: 'curve', originalCurve: manualDraft.curve };
     manualDraft.preview = { id: manualDraft.owner, kind: 'curve', ...point };
+    $('pitch').setPointerCapture?.(event.pointerId); event.preventDefault?.(); return;
+  }
+  if (manualDraft.kind === 'freeKick') {
+    if (!manualDraft.ball || Math.hypot(manualDraft.ball.x - point.x, manualDraft.ball.y - point.y) > 4) { updateManualPanel('Şut çizgisini başlatmak için topun üzerine bas.'); return; }
+    manualDrag = { id: manualDraft.owner, kind: 'kick' }; manualDraft.preview = { id: manualDraft.owner, kind: 'kick', ...point };
     $('pitch').setPointerCapture?.(event.pointerId); event.preventDefault?.(); return;
   }
   const source = closestControlledPlayer(point); if (!source) return;
@@ -399,7 +393,7 @@ function manualPointerMove(event) {
   manualDraft.preview = { id: manualDrag.id, kind: manualDrag.kind, ...point }; event.preventDefault?.();
 }
 function curveFromPoint(point) {
-  const source = game?.players.find(player => player.id === manualDraft?.owner), aim = manualDraft?.aim;
+  const source = manualKickSource(), aim = manualDraft?.aim;
   if (!source || !aim) return 0;
   const dx = aim.x - source.x, dy = aim.y - source.y, length = Math.hypot(dx, dy) || 1;
   const middle = { x: (source.x + aim.x) / 2, y: (source.y + aim.y) / 2 }, maxBow = Math.min(9, length * .22) || 1;
@@ -411,8 +405,8 @@ function manualPointerUp(event) {
   const point = pitchPoint(event), sourceId = manualDrag.id, kind = manualDrag.kind; manualDrag = null; manualDraft.preview = null;
   if (kind === 'kick') {
     manualDraft.aim = { x: Math.round(point.x * 10) / 10, y: Math.round(point.y * 10) / 10 };
-    if (manualDraft.kind !== 'freeKick' && manualDraft.action !== 'dribble') { manualDraft.curve = 0; manualDraft.power = .3; manualDraft.powerLocked = false; manualDraft.meterStartedAt = performance.now(); }
-    updateManualPanel(manualDraft.kind === 'freeKick' ? 'Şut hedefi çizildi. Güç ve falsoyu ayarlayıp vuruşu kullan.' : manualDraft.action === 'dribble' ? `${shirt(sourceId)} için top sürme yolu çizildi. Oyun sırasında Space ile vuruş kararı ver.` :
+    if (manualDraft.action !== 'dribble') { manualDraft.curve = 0; manualDraft.power = .3; manualDraft.powerLocked = false; manualDraft.meterStartedAt = performance.now(); }
+    updateManualPanel(manualDraft.action === 'dribble' ? `${shirt(sourceId)} için top sürme yolu çizildi. Oyun sırasında Space ile vuruş kararı ver.` :
       `${shirt(sourceId)} için ${manualDraft.action === 'shoot' ? 'şut' : 'serbest pas'} yönü çizildi. Okun ucundan yana sürükleyerek falso ver; sonra oyuncunun yanındaki hareketli güç göstergesine tıkla.`);
   } else if (kind === 'curve') {
     manualDraft.curve = curveFromPoint(point);
@@ -425,7 +419,7 @@ function manualPointerUp(event) {
   event.preventDefault?.();
 }
 async function applyManualDraft() {
-  const freeKickReady = manualDraft?.kind === 'freeKick' && manualDraft.ball && manualDraft.wall && manualDraft.aim;
+  const freeKickReady = manualDraft?.kind === 'freeKick' && manualDraft.ball && manualDraft.wall && manualDraft.aim && manualDraft.powerLocked;
   const manualReady = manualDraft?.kind === 'manual' && manualDraft.aim && (manualDraft.action === 'dribble' || manualDraft.powerLocked);
   if ((!freeKickReady && !manualReady) || applyingManual) return;
   applyingManual = true; updateManualPanel('Plan maç motoruna uygulanıyor…');
@@ -502,16 +496,12 @@ $('stadium-sound').addEventListener('click', toggleStadiumSound);
 $('goal-close').addEventListener('click', () => { $('goal-overlay').hidden = true; goalUntil = 0; });
 $('exit-close').addEventListener('click', () => { $('exit-overlay').hidden = true; exitUntil = 0; });
 $('final-close').addEventListener('click', () => { $('final-overlay').hidden = true; });
-$('manual-power').addEventListener('input', updateManualKickControls);
-$('manual-curve').addEventListener('input', updateManualKickControls);
 $('manual-power-meter').addEventListener('click', selectManualPower);
 $('free-kick-ball').addEventListener('click', () => { if (manualDraft?.kind === 'freeKick') { manualDraft.setupTool = 'ball'; updateManualPanel('Topu yerleştirmek istediğin noktaya tıkla.'); } });
 $('free-kick-wall-count').addEventListener('input', () => {
   const count = Number($('free-kick-wall-count').value || 4); $('free-kick-wall-count-value').textContent = String(count);
   if (manualDraft?.kind === 'freeKick') { manualDraft.wallCount = count; updateManualPanel(); }
 });
-$('free-kick-shot-power').addEventListener('input', updateManualKickControls);
-$('free-kick-curve-power').addEventListener('input', updateManualKickControls);
 $('pitch').addEventListener('pointerdown', manualPointerDown); $('pitch').addEventListener('pointermove', manualPointerMove);
 $('pitch').addEventListener('pointerup', manualPointerUp); $('pitch').addEventListener('pointercancel', () => {
   if (manualDrag?.kind === 'curve' && manualDraft) manualDraft.curve = manualDrag.originalCurve;

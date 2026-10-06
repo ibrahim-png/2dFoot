@@ -214,14 +214,15 @@ export class Simulation {
         continue;
       }
       if (this.freeKick && this.game.flight?.kind === 'shot' && this.game.flight.reason === 'manual-shot') this.freeKickShotActive = true;
-      if (this.freeKick && this.freeKickShotActive && (!this.game.flight || this.game.flight.reason !== 'manual-shot')) {
+      // Landing or a parry transfers the shot to loose-ball physics. The
+      // attempt is still live until possession, a boundary, or a full stop.
+      const movingLooseBall = this.game.loose && this.game.looseVelocity && !this.game.owner;
+      if (this.freeKick && this.freeKickShotActive && !this.game.ended && !this.game.flight && !movingLooseBall) {
         const save = this.game.events.find(event => event.serial > previousEventSerial && event.type === 'save');
         if (save) {
           this.freeKickShotActive = false; this.freeKickResetAt = this.game.elapsed + 1.5; this.game.restart = Math.max(this.game.restart, 1.5);
           this.game.flight = null; this.game.freeKickFreezePlayers = true;
-          if (save.parried) {
-            this.game.restart = 0; this.game.looseProtection = 1.5; this.game.looseExcluded = this.game.players.filter(player => player.active).map(player => player.id);
-          } else { this.game.loose = false; this.game.looseVelocity = null; }
+          this.game.loose = false; this.game.looseVelocity = null;
         } else {
           const frame = this.repeatFreeKick();
           if (frames.at(-1)?.elapsed === frame.elapsed) frames[frames.length - 1] = frame; else frames.push(frame);

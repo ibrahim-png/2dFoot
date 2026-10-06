@@ -311,21 +311,45 @@ test('Sen oyna top sürme continues until Space requests a new backend decision 
   assert.equal(c.api.state().playback.manualPause.manualControl.owner, owner.id); assert.equal(c.node('manual-panel').hidden, false); assert.equal(c.node('manual-action-label').textContent, 'Şut');
 });
 
-test('Free kick mode places the wall automatically and sends wall count, player skills, power and curve', async t => {
+test('Free kick uses the drawn curve and timed power meter before sending the shot', async t => {
   const c = await client(t); c.node('match-mode').value = 'freeKick'; c.node('match-mode').listeners.change(); await settle();
   const source = c.sources.at(-1), eventAt = p => ({ clientX: 60 + p.x * 10, clientY: 60 + p.y * 10, pointerId: 1, preventDefault() {} });
   assert.equal(source.request.mode, 'freeKick'); assert.equal(c.node('free-kick-controls').hidden, false); assert.equal(c.node('manual-action-label').textContent, 'Şut');
   assert.equal(c.node('manual-apply').hidden, false);
   c.node('pitch').listeners.pointerdown(eventAt({ x: 76, y: 28 }));
   c.node('free-kick-wall-count').value = '5'; c.node('free-kick-wall-count').listeners.input();
-  c.node('free-kick-shot-power').value = '38'; c.node('free-kick-shot-power').listeners.input();
-  c.node('free-kick-curve-power').value = '85'; c.node('free-kick-curve-power').listeners.input();
-  c.node('manual-power').value = '72'; c.node('manual-power').listeners.input(); c.node('manual-curve').value = '35'; c.node('manual-curve').listeners.input();
+  const owner = c.api.state().game.players[c.api.state().game.owner - 1];
   c.node('pitch').listeners.pointerdown(eventAt({ x: 76, y: 28 })); c.node('pitch').listeners.pointerup(eventAt({ x: 107, y: 34 }));
+  assert.equal(c.node('manual-apply').disabled, true);
+  c.node('manual-apply').listeners.click(); await settle();
+  assert.equal(source.controls.some(item => item.action === 'freeKickPlan'), false);
+  const length = Math.hypot(31, 6), bow = Math.min(9, length * .22) * .35;
+  const handle = { x: 91.5 - 6 / length * bow, y: 31 + 31 / length * bow };
+  c.node('pitch').listeners.pointerdown(eventAt({ x: 107, y: 34 }));
+  c.node('pitch').listeners.pointermove(eventAt(handle)); c.node('pitch').listeners.pointerup(eventAt(handle));
+  c.tick(.45); c.node('pitch').listeners.pointerdown(eventAt({ x: 80.1, y: 28 }));
+  assert.equal(c.node('manual-apply').disabled, false);
+  c.tick(.2); assert.equal(c.node('manual-timed-power-value').textContent, '%65');
   assert.equal(c.node('manual-apply').disabled, false); c.node('manual-apply').listeners.click(); await settle(); await settle();
   const control = source.controls.find(item => item.action === 'freeKickPlan'); assert.ok(control);
   assert.deepEqual(control.plan.ball, { x: 76, y: 28 }); assert.equal('wall' in control.plan, false); assert.equal(control.plan.wallCount, 5);
-  assert.equal(control.plan.shotPower, 38); assert.equal(control.plan.curvePower, 85); assert.equal('lift' in control.plan, false);
-  assert.deepEqual(control.plan.aim, { x: 107, y: 34 }); assert.equal(control.plan.power, .72); assert.equal(control.plan.curve, .35);
+  assert.equal(control.plan.shotPower, owner.traits.shotPower); assert.equal(control.plan.curvePower, owner.traits.curvePower ?? 70); assert.equal('lift' in control.plan, false);
+  assert.deepEqual(control.plan.aim, { x: 107, y: 34 }); assert.ok(Math.abs(control.plan.power - .65) < 1e-9); assert.ok(Math.abs(control.plan.curve - .35) < 1e-9);
   assert.equal(c.node('manual-apply').hidden, true);
+});
+
+test('Free kick power can be reselected and moving the ball requires a new aim and power', async t => {
+  const c = await client(t); c.node('choose-free-kick').listeners.click(); await settle();
+  const eventAt = p => ({ clientX: 60 + p.x * 10, clientY: 60 + p.y * 10, pointerId: 1, preventDefault() {} });
+  const down = point => c.node('pitch').listeners.pointerdown(eventAt(point));
+  down({ x: 76, y: 28 }); down({ x: 76, y: 28 }); c.node('pitch').listeners.pointerup(eventAt({ x: 107, y: 34 }));
+  c.tick(.45); down({ x: 80.1, y: 28 }); assert.equal(c.node('manual-apply').disabled, false);
+  down({ x: 80.1, y: 28 }); assert.equal(c.node('manual-apply').disabled, true);
+  c.tick(.18); down({ x: 80.1, y: 28 }); assert.equal(c.node('manual-timed-power-value').textContent, '%44');
+  assert.equal(c.node('manual-apply').disabled, false);
+  c.node('free-kick-ball').listeners.click(); down({ x: 82, y: 40 }); assert.equal(c.node('manual-apply').disabled, true);
+  down({ x: 82, y: 40 }); c.node('pitch').listeners.pointerup(eventAt({ x: 107, y: 34 }));
+  assert.equal(c.node('manual-apply').disabled, true);
+  c.tick(.45); down({ x: 86.1, y: 40 }); assert.equal(c.node('manual-apply').disabled, false);
+  c.node('manual-clear').listeners.click(); assert.equal(c.node('manual-apply').disabled, true);
 });

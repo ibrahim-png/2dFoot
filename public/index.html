@@ -37,16 +37,10 @@
           <div class="free-kick-controls" id="free-kick-controls" hidden>
             <div class="free-kick-buttons"><button class="secondary" id="free-kick-ball" type="button">Topun yerini seç</button></div>
             <label>Barajdaki oyuncu sayısı <output id="free-kick-wall-count-value">4</output><input id="free-kick-wall-count" type="range" min="1" max="6" step="1" value="4"></label>
-            <label>Vuruşçunun şut gücü <output id="free-kick-shot-power-value">30 / 40</output><input id="free-kick-shot-power" type="range" min="20" max="40" step="1" value="30"></label>
-            <label>Vuruşçunun falso gücü <output id="free-kick-curve-power-value">%70</output><input id="free-kick-curve-power" type="range" min="20" max="100" step="1" value="70"></label>
-            <p class="hint">Topun yerini sahaya tıkla. Baraj, yakın direk hattında topun 9,15 metre önüne otomatik yerleşir; yalnızca oyuncu sayısını değiştirirsin. Topun üzerinden şut yönünü çiz. Oyuncu şut gücü top hızını, falso gücü kıvrımı belirler. Şut yüksekliğini sistem baraj ve kale mesafesine göre otomatik hesaplar.</p>
+            <p class="hint">Topun yerini sahaya dokunarak seç. Baraj otomatik yerleşir; oyuncu sayısını değiştirebilirsin. Topun üzerinden şut yönünü çiz, okun ucundan yana sürükleyerek falso ver. Topun yanındaki hareketli güç göstergesine istediğin seviyede dokun, ardından planı uygula. Şut yüksekliği otomatik hesaplanır. Top yerde sekse de pozisyon sonuçlanana kadar oyun sürer.</p>
           </div>
           <div class="manual-kick-controls">
             <div class="manual-auto-action"><span>Sistem tarafından seçilen aksiyon</span><strong id="manual-action-label">Şut</strong></div>
-            <div class="manual-slider-controls" id="manual-slider-controls">
-              <label>Şut gücü <output id="manual-power-value">%100</output><input id="manual-power" type="range" min="30" max="100" step="1" value="100"></label>
-              <label>Falso <output id="manual-curve-value">Düz</output><input id="manual-curve" type="range" min="-100" max="100" step="5" value="0"></label>
-            </div>
             <div class="manual-timing-control" id="manual-timing-control" hidden>
               <button class="power-meter" id="manual-power-meter" type="button" aria-label="Hareketli güç göstergesini mevcut seviyede durdur">
                 <span class="power-meter-fill" id="manual-power-fill"></span><span class="power-meter-marker" id="manual-power-marker"></span>
